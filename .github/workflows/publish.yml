@@ -1,0 +1,49 @@
+name: publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Deploy only once all three secrets are configured; otherwise just build.
+      DEPLOY_READY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && secrets.FIREBASE_PROJECT_ID != '' && secrets.PUBLISH_PATH_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      - name: Build skill bundles
+        run: python3 build/build.py
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Stage site under path token
+        if: env.DEPLOY_READY == 'true'
+        run: |
+          mkdir -p "site/${{ secrets.PUBLISH_PATH_TOKEN }}"
+          cp -r dist/. "site/${{ secrets.PUBLISH_PATH_TOKEN }}/"
+
+      - name: Deploy to Firebase Hosting
+        if: env.DEPLOY_READY == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          channelId: live
+
+      - name: Note skipped deploy
+        if: env.DEPLOY_READY != 'true'
+        run: echo "Firebase secrets not configured yet — built dist/ only (see README one-time setup)."
