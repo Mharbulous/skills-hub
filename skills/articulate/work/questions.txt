@@ -1,0 +1,61 @@
+Q1 (ORIG-RQ1): Does the revision preserve the explanation that "any workflow simple enough to skip a layer is simple enough to not automate" as the stated reason for always using three layers?
+Q2 (ORIG-RQ2): Does the revision preserve the phrase "sequence diagram, and context budget model" as part of what `reference/three-layer-architecture.md` contains?
+Q3 (ORIG-RQ3): Does the revision preserve the label "ADOPT WITH CAVEATS" as the classification applied to each of the 8 distribution factors?
+Q4 (ORIG-RQ4): Does the revision preserve the instruction to read evidence files from `evidence-for-factors/` by referencing the example path `evidence-for-factors/context-isolation.md`?
+Q5 (ORIG-RQ5): Does the revision preserve the statement that the operation layer is "where intelligence is most valuable" and that "the other two layers exist so that it can operate with minimal, high-signal context"?
+Q6 (ORIG-RQ6): Does the revision preserve the explanation that instructions cost "hundreds of tokens" while working state is expensive, and the directive to "distribute accordingly"?
+Q7 (ORIG-RQ7): Does the revision preserve the detail that expert personas damage accuracy specifically on MMLU retrieval tasks by −3.6 to −5.3 points AND that they help on generative tasks such as writing, extraction, and STEM explanation?
+Q8 (ORIG-RQ8): Does the revision preserve the explanation that system prompt placement has stronger steering than user prompt placement?
+Q9 (ORIG-RQ9): Does the revision preserve the characterization of tool restrictions as analogous to `const` in code, communicating that "output is information, not action"?
+Q10 (ORIG-RQ10): Does the revision preserve the explicit statement that the Sonnet/Opus gap for coding is approximately 1.2 points on SWE-bench and is "negligible for most tasks"?
+Q11 (ORIG-RQ11): Does the revision preserve the ~19% routing error floor as applying specifically to "best routers"?
+Q12 (ORIG-RQ12): Does the revision preserve the instruction that N=1 instances of reuse stay embedded and that extraction should occur "when duplication actually appears, not speculatively"?
+Q13 (ORIG-RQ13): Does the revision preserve "shared protocols (lookup order, response format, common patterns)" as prime extraction candidates for shared skills?
+Q14 (ORIG-RQ14): Does the revision preserve the example of genuinely conflicting skills — code-simplifier ("reduce abstractions") vs philosophy-enforcer ("maintain design principles")?
+Q15 (ORIG-RQ15): Does the revision preserve the statement that "frontier models handle coherent multi-instruction well" and that separation is a last resort?
+Q16 (ORIG-RQ16): Does the revision preserve the example of a hybrid domain variance pattern — a procedural skill checklist that allows agent judgment at decision points?
+Q17 (ORIG-RQ17): Does the revision preserve the anti-pattern description specifying that omitting execution guards "allows the main model to run the workflow inline, bypassing the agent boundary"?
+Q18 (ORIG-RQ18): Does the revision preserve the anti-pattern description specifying that defaulting to foreground spawn "blocks the main conversation unnecessarily" and that background is the right default?
+Q19 (ORIG-RQ19): Does the revision preserve the statement that "The 2-3K token overhead is negligible against the 10K+ tokens any automation-worthy workflow generates"?
+Q20 (ORIG-RQ20): Does the revision preserve the explicit rule heading and rule statement for Factor 1 ("Large working state belongs in the operation layer. Context selection/extraction belongs in orchestration.")?
+Q21 (ORIG-RQ21): Does the revision preserve the statement that operation layer is "where intelligence is most valuable"?
+Q22 (ORIG-RQ22): Does the revision preserve the explicit rule heading and rule statement for Factor 2 ("Persona steers methodology, not identity. Place in the operation layer.")?
+Q23 (ORIG-RQ23): Does the revision preserve the statement that methodological framing is "safer for analytical tasks"?
+Q24 (ORIG-RQ24): Does the revision preserve the explicit distribution line for Factor 2 distinguishing "Methodological framing in agent definition (isolation)" from "Task-specific persona in skill (operation)" with layer labels?
+Q25 (ORIG-RQ25): Does the revision preserve the explicit rule heading and rule statement for Factor 3 ("Use tool restrictions to declare intent; use the orchestration contract for delivery mode.")?
+Q26 (ORIG-RQ26): Does the revision preserve the explicit distribution statement for Factor 3 ("Tool restrictions in agent definition. Delivery mode in orchestration spawn contract.")?
+Q27 (ORIG-RQ27): Does the revision preserve the explicit rule heading and rule statement for Factor 4 ("Model pinning lives in the isolation layer — a bonus of the architecture, not a reason for it.")?
+Q28 (ORIG-RQ28): Does the revision preserve the statement that "Prompt quality matters more than model tier"?
+Q29 (ORIG-RQ29): Does the revision preserve the explicit rule heading and rule statement for Factor 5 ("The orchestration layer determines how the capability is found and triggered.")?
+Q30 (ORIG-RQ30): Does the revision preserve the explicit distribution statement for Factor 5 ("Invocation mechanism in orchestration. Operation layer is invocation-agnostic.")?
+Q31 (ORIG-RQ31): Does the revision preserve the explicit rule heading and rule statement for Factor 6 ("Extract identical behavior into a shared skill when duplication actually appears — not speculatively.")?
+Q32 (ORIG-RQ32): Does the revision preserve the statement that "~15–20 is the practical ceiling" for skill count?
+Q33 (ORIG-RQ33): Does the revision preserve the explicit distribution statement for Factor 6 ("Shared behavior in a standalone skill loaded by multiple agents. Agent-specific behavior stays per-agent.")?
+Q34 (ORIG-RQ34): Does the revision preserve the explicit rule heading and rule statement for Factor 7 ("Genuinely incompatible skill requirements get separate agents. Most apparent conflicts are scope problems — fix authoring first.")?
+Q35 (ORIG-RQ35): Does the revision preserve the explicit rule heading and rule statement for Factor 8 ("Procedural content belongs in the skill. Exploratory, judgment-heavy content benefits from agent-level framing.")?
+Q36 (ORIG-RQ36): Does the revision preserve the introductory framing for the 8 factors that each factor is "a real signal, not absolute"?
+Q37 (ORIG-RQ37): Does the revision preserve the instruction to load evidence files only "when a factor's verdict is ambiguous — not preemptively"?
+Q38 (NQ1): Does the revision preserve the exact wording "Context Engineering: Three-Layer Architecture + 8-Factor Distribution" as the document title, rather than dropping "Context Engineering:" from the heading?
+Q39 (NQ2): Does the revision preserve the phrase "the three-layer structure" in the "Why always three?" rationale, rather than replacing it with "the 2-3K token overhead" alone without specifying what the overhead refers to?
+Q40 (NQ3): Does the revision preserve "working tokens" as the unit of measure in "the 10K+ working tokens that any automation-worthy workflow generates," rather than shortening it to just "10K+ tokens"?
+Q41 (NQ4): Does the revision preserve the explicit instruction that step 1 is to read `reference/three-layer-architecture.md` "for the structural pattern," rather than omitting that purpose clause?
+Q42 (NQ5): Does the revision preserve "current prompts" (with the qualifier "current") in step 2 of "How to Apply," rather than dropping the word "current"?
+Q43 (NQ6): Does the revision preserve the full phrase "See `reference/three-layer-architecture.md` for guard boilerplate" in step 4 of "How to Apply," rather than omitting that cross-reference?
+Q44 (NQ7): Does the revision preserve the parenthetical description of subfolders — "(read-only knowledge)" for `references/`, "(deterministic executables)" for `scripts/`, and "(persistent state)" for `memory/`" — rather than omitting all three descriptions?
+Q45 (NQ8): Does the revision preserve "What Stays Where" as the subtitle for Factor 1 ("Context Isolation — What Stays Where"), rather than dropping the subtitle entirely?
+Q46 (NQ9): Does the revision preserve "Task-Dependent Steering" as the subtitle for Factor 2 ("Persona — Task-Dependent Steering"), rather than dropping the subtitle?
+Q47 (NQ10): Does the revision preserve "Tool Restrictions + Delivery Mode" as the subtitle for Factor 3 ("Authority Boundaries — Tool Restrictions + Delivery Mode"), rather than dropping the subtitle?
+Q48 (NQ11): Does the revision preserve "Cost Optimization" as the subtitle for Factor 4 ("Model Selection — Cost Optimization"), rather than dropping the subtitle?
+Q49 (NQ12): Does the revision preserve "Discovery vs Direct" as the subtitle for Factor 5 ("Invocation Pattern — Discovery vs Direct"), rather than dropping the subtitle?
+Q50 (NQ13): Does the revision preserve "Shared Skills" as the subtitle for Factor 6 ("Reuse Cardinality — Shared Skills"), rather than dropping the subtitle?
+Q51 (NQ14): Does the revision preserve "Isolation as Resolution" as the subtitle for Factor 7 ("Instruction Conflict — Isolation as Resolution"), rather than dropping the subtitle?
+Q52 (NQ15): Does the revision preserve "Procedural vs Exploratory" as the subtitle for Factor 8 ("Domain Variance — Procedural vs Exploratory"), rather than dropping the subtitle?
+Q53 (NQ16): Does the revision preserve the explicit mention that "Changing extracted behavior updates all consumers simultaneously" in Factor 6, rather than omitting this consequence?
+Q54 (NQ17): Does the revision preserve the full bullet "N=1 stays embedded. Extract when duplication actually appears, not speculatively" as two separate statements in Factor 6, rather than collapsing them into one?
+Q55 (NQ18): Does the revision preserve the note that agents can pin `model: haiku` (not only `model: sonnet`) in Factor 4, rather than omitting the haiku option?
+Q56 (NQ19): Does the revision preserve the explanation that pinning to tier names "reduces deprecation churn" as the stated reason in Factor 4, rather than omitting that rationale?
+Q57 (NQ20): Does the revision preserve the explicit mention that "~19% routing error floor" applies "even for best routers" in Factor 5, rather than dropping the qualifier "even for best routers"?
+Q58 (NQ21): Does the revision preserve the bullet "Skills inherit caller's model" under Factor 4, rather than omitting it?
+Q59 (NQ22): Does the revision preserve the anti-pattern "Putting context extraction logic in the skill instead of the orchestration layer" with the full phrase "instead of the orchestration layer," rather than truncating it to just "in the skill"?
+Q60 (NQ23): Does the revision preserve the anti-pattern "Passing large diffs or generated content back through layers" with the specific examples "large diffs or generated content," rather than generalizing to just "large content"?
+Q61 (NQ24): Does the revision preserve the full Factor 2 table row for "Code generation" as "Expert acceptable ('write following X patterns')" rather than dropping the parenthetical example and keeping only "Expert acceptable"?

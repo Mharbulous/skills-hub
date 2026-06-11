@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "process-diagram-schema",
+  "title": "Process Diagram Schema (Commit-Derived)",
+  "description": "Schema for native JSON process diagrams derived from git commit history",
+  "type": "object",
+  "required": ["title", "description", "version", "metadata", "phases", "tools", "dataFlows", "dependencyGraph"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://json-schema.org/draft/2020-12/schema"
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable title for the process"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of what the process accomplishes"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of the diagram"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Source and context information",
+      "required": ["sourceType", "branch", "extractedDate"],
+      "properties": {
+        "sourceType": {
+          "type": "string",
+          "enum": ["git-commit-history", "markdown-document", "manual"],
+          "description": "How the diagram was generated"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Git branch analyzed"
+        },
+        "commitRange": {
+          "type": "string",
+          "description": "First..last commit hashes included"
+        },
+        "extractedDate": {
+          "type": "string",
+          "format": "date",
+          "description": "When diagram was generated"
+        },
+        "domain": {
+          "type": "string",
+          "description": "Domain area (e.g., legal, devops)"
+        },
+        "matterId": {
+          "type": "string",
+          "description": "Matter or project identifier"
+        }
+      }
+    },
+    "phases": {
+      "type": "array",
+      "description": "Major phases of the process",
+      "items": { "$ref": "#/$defs/phase" }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Tools used throughout the process",
+      "items": { "$ref": "#/$defs/tool" }
+    },
+    "dataFlows": {
+      "type": "array",
+      "description": "Data transformation pipelines",
+      "items": { "$ref": "#/$defs/dataFlow" }
+    },
+    "dependencyGraph": {
+      "type": "object",
+      "description": "Explicit step dependencies",
+      "required": ["edges"],
+      "properties": {
+        "description": { "type": "string" },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to"],
+            "properties": {
+              "from": { "type": "string" },
+              "to": { "type": "string" },
+              "reason": {
+                "type": "string",
+                "description": "Why this dependency exists (e.g., file created by from, used by to)"
+              }
+            }
+          }
+        }
+      }
+    },
+    "parallelExecutionGroups": {
+      "type": "array",
+      "description": "Steps that can execute concurrently",
+      "items": {
+        "type": "object",
+        "required": ["groupId", "steps"],
+        "properties": {
+          "groupId": { "type": "string" },
+          "description": { "type": "string" },
+          "steps": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "implementationStatus": {
+      "type": "object",
+      "description": "Current state of process implementation",
+      "properties": {
+        "complete": { "type": "array", "items": { "type": "string" } },
+        "pending": { "type": "array", "items": { "type": "string" } },
+        "notStarted": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "phase": {
+      "type": "object",
+      "required": ["id", "name", "description", "order", "steps"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^phase_\\d+$" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "order": { "type": "integer", "minimum": 1 },
+        "dateRange": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string", "format": "date" },
+            "end": { "type": "string", "format": "date" }
+          },
+          "description": "Date range of commits in this phase"
+        },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": ["id", "name", "description", "order", "inputs", "outputs", "dependencies"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^step_\\d+\\.\\d+$" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "order": { "type": "integer", "minimum": 1 },
+        "commitHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{7,40}$",
+          "description": "Git commit hash that executed this step"
+        },
+        "commitDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of the commit"
+        },
+        "commitMessage": {
+          "type": "string",
+          "description": "Original commit message"
+        },
+        "status": { "type": "string", "enum": ["not_implemented", "pending", "complete"] },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/input" }
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/output" }
+        },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/toolRef" }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Step IDs this step depends on"
+        },
+        "parallelWith": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Steps that can run concurrently with this one"
+        },
+        "parallelProcessing": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "strategy": { "type": "string" }
+          }
+        },
+        "filesChanged": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files added/modified by this commit"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "source": { "type": "string" },
+        "fromStep": { "type": "string" },
+        "fromCommit": {
+          "type": "string",
+          "description": "Commit hash that created this input"
+        },
+        "required": { "type": "boolean", "default": true },
+        "namingConvention": { "type": "string" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "destination": { "type": "string" },
+        "namingConvention": { "type": "string" },
+        "note": { "type": "string" },
+        "schema": {
+          "type": "object",
+          "description": "JSON schema for structured outputs"
+        },
+        "contents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Expected content sections for documents"
+        },
+        "structure": {
+          "type": "object",
+          "description": "Directory structure for folder outputs"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": ["id", "name", "type", "purpose", "usedInSteps"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["script", "skill", "manual", "external", "orchestration"] },
+        "location": { "type": "string" },
+        "purpose": { "type": "string" },
+        "command": { "type": "string" },
+        "createdInCommit": {
+          "type": "string",
+          "description": "Commit hash where tool was created (tooling commit, excluded from process)"
+        },
+        "usedInSteps": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "toolRef": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "location": { "type": "string" },
+        "command": { "type": "string" },
+        "purpose": { "type": "string" }
+      }
+    },
+    "dataFlow": {
+      "type": "object",
+      "required": ["id", "name", "description", "path", "transformation", "steps"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^flow_\\d+$" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "path": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Folder path from source to destination"
+        },
+        "transformation": { "type": "string" },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "commits": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Commit hashes involved in this data flow"
+        }
+      }
+    }
+  }
+}

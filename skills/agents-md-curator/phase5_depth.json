@@ -1,0 +1,199 @@
+{
+  "assignments": [
+    {
+      "line_id": 252,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "Listbot",
+        "SyncoPaid",
+        "claude-config",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 253,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "Listbot",
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 256,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "Listbot",
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 257,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 258,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 259,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 260,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 261,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 262,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 263,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 264,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 255,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "Listbot",
+        "SyncoPaid",
+        "claude-config",
+        "listbot"
+      ],
+      "prefix": ""
+    },
+    {
+      "line_id": 251,
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md",
+      "repos": [
+        "Listbot",
+        "SyncoPaid",
+        "listbot"
+      ],
+      "prefix": ""
+    }
+  ],
+  "by_file": {
+    "C:\\Users\\Brahm\\.claude\\CLAUDE.md": [
+      252,
+      253,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      255,
+      251
+    ]
+  },
+  "promotions": [
+    {
+      "line_id": 257,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    },
+    {
+      "line_id": 258,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    },
+    {
+      "line_id": 259,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    },
+    {
+      "line_id": 260,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    },
+    {
+      "line_id": 261,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    },
+    {
+      "line_id": 262,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    },
+    {
+      "line_id": 263,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    },
+    {
+      "line_id": 264,
+      "action": "promote",
+      "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+    }
+  ],
+  "unplaced": [
+    {
+      "line_id": 254,
+      "reason": "no managed file in repo 'listbot' covers prefix ''"
+    }
+  ],
+  "stats": {
+    "total_lines": 14,
+    "assigned": 13,
+    "unplaced": 1,
+    "promotions": 8
+  }
+}

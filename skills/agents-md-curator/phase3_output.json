@@ -1,0 +1,150 @@
+{
+  "files": {
+    "C:\\Users\\Brahm\\.claude\\CLAUDE.md": {
+      "placed": [
+        {
+          "line_id": 253,
+          "content": "When creating implementation planning documents, optimize for Sonnet 4.5 by omitting planning details that would be obvious.",
+          "section": "Conventions",
+          "score": 70.0,
+          "rank": 1
+        },
+        {
+          "line_id": 252,
+          "content": "When creating documentation, maintain a single source of truth. When subjects overlap, maintain the earlier document as SSOT and have secondary reference it.",
+          "section": "Conventions",
+          "score": 41.0,
+          "rank": 2
+        },
+        {
+          "line_id": 251,
+          "content": "Pre-alpha stage: no existing user data, no migration scripts, implement schema changes directly. Firestore and Storage can be wiped clean at any time.",
+          "section": "Project Context",
+          "score": 34.0,
+          "rank": 3
+        },
+        {
+          "line_id": 255,
+          "content": "Documentation uses CLAUDE.md indexed feature-module structure. Each feature folder has a CLAUDE.md index.",
+          "section": "Pointers",
+          "score": 28.0,
+          "rank": 4
+        },
+        {
+          "line_id": 257,
+          "content": "Subagents should only be given only tools that are necessary to do the job that they are being assigned.",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 5
+        },
+        {
+          "line_id": 258,
+          "content": "Shell paths on Windows: Never pass raw Windows backslash paths (e.g. C:\\Users\\Brahm\\file.py) to Bash \u2014 backslashes are interpreted as escape characters, silently stripping them and corrupting the path. Always use $HOME with forward slashes and quote the arguments: \"$HOME/.claude/skills/file.py\".",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 6
+        },
+        {
+          "line_id": 259,
+          "content": "Refer to yourself in the third person and model; i.e. \"Claude Sonnet will...\"",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 7
+        },
+        {
+          "line_id": 260,
+          "content": "Clarify user instructions that are contradictory, ambiguous or unclear.",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 8
+        },
+        {
+          "line_id": 261,
+          "content": "Use the AskUserQuestion tool if you have more than one question.",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 9
+        },
+        {
+          "line_id": 262,
+          "content": "Add comments only if the logic is non-obvious.",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 10
+        },
+        {
+          "line_id": 263,
+          "content": "When a test fails, print the failing assertion and the smallest reproducing input before attempting a fix.",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 11
+        },
+        {
+          "line_id": 264,
+          "content": "Before declaring a task complete, list what you verified (tests run, files read end-to-end) and what you assumed without verifying.",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 12
+        },
+        {
+          "line_id": 256,
+          "content": "When creating implementation planning documents, optimize for Sonnet by omitting planning details that would be obvious.",
+          "section": "Conventions",
+          "score": 14.0,
+          "rank": 13
+        }
+      ],
+      "cold": [],
+      "promotions": [
+        {
+          "line_id": 257,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        },
+        {
+          "line_id": 258,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        },
+        {
+          "line_id": 259,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        },
+        {
+          "line_id": 260,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        },
+        {
+          "line_id": 261,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        },
+        {
+          "line_id": 262,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        },
+        {
+          "line_id": 263,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        },
+        {
+          "line_id": 264,
+          "action": "promote",
+          "target": "C:\\Users\\Brahm\\.claude\\CLAUDE.md"
+        }
+      ],
+      "demotions": [],
+      "stats": {
+        "total_lines": 13,
+        "placed_count": 13,
+        "cold_count": 0,
+        "budget_used": 13,
+        "budget_available": 159
+      }
+    }
+  }
+}

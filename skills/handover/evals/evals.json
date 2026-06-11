@@ -1,0 +1,52 @@
+{
+  "skill_name": "handover",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I just finished investigating a performance issue in our Express app. Here's what I found:\n\n- The login endpoint at `src/routes/login.ts` is slow because `UserService.findByEmail()` in `src/services/user-service.ts` does a full table scan instead of using the email index\n- I checked `src/models/user.ts` and confirmed the email column has an index defined, so the issue is in the query construction\n- I also looked at `src/services/session-service.ts` but it's unrelated - it just creates sessions after auth succeeds\n- I tried adding `.where('email', email)` directly but Knex requires `.first()` to use the index properly\n- The fix is to change the raw SQL query to use the Knex query builder with `.first()`\n\nI need to stop here. Create a handover for the next session.",
+      "expected_output": "A well-formatted handover file saved to .handovers/queued/ with proper YAML frontmatter (write_targets, read_only_targets), task description, red herrings, failed approaches, key discoveries, and a single-sentence next step. No code snippets or implementation details.",
+      "files": [],
+      "expectations": [
+        "The handover file is saved to .handovers/queued/ with a numbered filename",
+        "YAML frontmatter contains write_targets including src/services/user-service.ts",
+        "YAML frontmatter contains read_only_targets (not write_targets) for src/models/user.ts",
+        "src/services/session-service.ts appears in Red Herrings section, not in write_targets",
+        "The Next Step section contains a single sentence, not multi-step instructions",
+        "No code snippets or line numbers appear in the handover body",
+        "The failed approach about .where() is documented"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need to refactor the notification system. There are three pieces of work:\n\n1. First, update the database schema in `src/models/notification.ts` to add a `priority` enum field (low/medium/high/critical)\n2. Then, update `src/services/notification-sender.ts` to use the new priority field for routing - critical goes to SMS, high to push notification, medium/low to email only. This reads config from `src/config/notification-routes.ts`.\n3. Finally, add tests in `tests/notification-priority.test.ts` that verify the routing logic works correctly. The tests import and call the sender service.\n\nStep 2 depends on step 1 (needs the new field). Step 3 depends on step 2 (tests the routing). Create handovers for all three.",
+      "expected_output": "Three handover files with the same number prefix and letter suffixes (A, B, C) saved to .handovers/queued/. Each has proper YAML frontmatter. Letter suffixes encode implicit dependencies (no blocked_by needed). Files are in execution order: A=schema, B=sender, C=tests.",
+      "files": [],
+      "expectations": [
+        "Three separate handover files are created with letter suffixes A, B, C",
+        "All three files share the same numeric prefix",
+        "File A handles the schema change (notification.ts)",
+        "File B handles the sender update and depends implicitly on A via letter ordering",
+        "File C handles the tests and depends implicitly on A and B",
+        "No blocked_by field is used for within-chain dependencies",
+        "Each file has proper YAML frontmatter with write_targets and read_only_targets",
+        "src/config/notification-routes.ts appears as read_only_targets in file B, not write_targets"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Resume from the latest handover.",
+      "expected_output": "The agent runs the deterministic selector script as its FIRST action before reading any handover files. It uses --claim flag. It does NOT glob, grep, or read handover files before running the selector.",
+      "files": [
+        "test-fixtures/mock-repo/.handovers/queued/042_fix-auth-caching.md",
+        "test-fixtures/mock-repo/src/services/auth.ts",
+        "test-fixtures/mock-repo/src/middleware/session.ts"
+      ],
+      "expectations": [
+        "The selector script is invoked as the FIRST tool call (before any Glob, Grep, or Read of handover files)",
+        "The selector is called with --claim flag",
+        "The agent does NOT glob or read .handovers/ directory contents before running the selector",
+        "After selector returns ready status, the agent proceeds to work on the selected handover"
+      ]
+    }
+  ]
+}

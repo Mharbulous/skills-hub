@@ -1,0 +1,368 @@
+[
+  {
+    "id": "ORIG-RQ1",
+    "question": "Does the revision preserve the explanation that \"any workflow simple enough to skip a layer is simple enough to not automate\" as the stated reason for always using three layers?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ2",
+    "question": "Does the revision preserve the phrase \"sequence diagram, and context budget model\" as part of what `reference/three-layer-architecture.md` contains?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ3",
+    "question": "Does the revision preserve the label \"ADOPT WITH CAVEATS\" as the classification applied to each of the 8 distribution factors?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ4",
+    "question": "Does the revision preserve the instruction to read evidence files from `evidence-for-factors/` by referencing the example path `evidence-for-factors/context-isolation.md`?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ5",
+    "question": "Does the revision preserve the statement that the operation layer is \"where intelligence is most valuable\" and that \"the other two layers exist so that it can operate with minimal, high-signal context\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ6",
+    "question": "Does the revision preserve the explanation that instructions cost \"hundreds of tokens\" while working state is expensive, and the directive to \"distribute accordingly\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ7",
+    "question": "Does the revision preserve the detail that expert personas damage accuracy specifically on MMLU retrieval tasks by −3.6 to −5.3 points AND that they help on generative tasks such as writing, extraction, and STEM explanation?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ8",
+    "question": "Does the revision preserve the explanation that system prompt placement has stronger steering than user prompt placement?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ9",
+    "question": "Does the revision preserve the characterization of tool restrictions as analogous to `const` in code, communicating that \"output is information, not action\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ10",
+    "question": "Does the revision preserve the explicit statement that the Sonnet/Opus gap for coding is approximately 1.2 points on SWE-bench and is \"negligible for most tasks\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ11",
+    "question": "Does the revision preserve the ~19% routing error floor as applying specifically to \"best routers\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ12",
+    "question": "Does the revision preserve the instruction that N=1 instances of reuse stay embedded and that extraction should occur \"when duplication actually appears, not speculatively\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ13",
+    "question": "Does the revision preserve \"shared protocols (lookup order, response format, common patterns)\" as prime extraction candidates for shared skills?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ14",
+    "question": "Does the revision preserve the example of genuinely conflicting skills — code-simplifier (\"reduce abstractions\") vs philosophy-enforcer (\"maintain design principles\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ15",
+    "question": "Does the revision preserve the statement that \"frontier models handle coherent multi-instruction well\" and that separation is a last resort?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ16",
+    "question": "Does the revision preserve the example of a hybrid domain variance pattern — a procedural skill checklist that allows agent judgment at decision points?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ17",
+    "question": "Does the revision preserve the anti-pattern description specifying that omitting execution guards \"allows the main model to run the workflow inline, bypassing the agent boundary\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ18",
+    "question": "Does the revision preserve the anti-pattern description specifying that defaulting to foreground spawn \"blocks the main conversation unnecessarily\" and that background is the right default?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ19",
+    "question": "Does the revision preserve the statement that \"The 2-3K token overhead is negligible against the 10K+ tokens any automation-worthy workflow generates\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ20",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 1 (\"Large working state belongs in the operation layer. Context selection/extraction belongs in orchestration.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ21",
+    "question": "Does the revision preserve the statement that operation layer is \"where intelligence is most valuable\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ22",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 2 (\"Persona steers methodology, not identity. Place in the operation layer.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ23",
+    "question": "Does the revision preserve the statement that methodological framing is \"safer for analytical tasks\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ24",
+    "question": "Does the revision preserve the explicit distribution line for Factor 2 distinguishing \"Methodological framing in agent definition (isolation)\" from \"Task-specific persona in skill (operation)\" with layer labels?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ25",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 3 (\"Use tool restrictions to declare intent; use the orchestration contract for delivery mode.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ26",
+    "question": "Does the revision preserve the explicit distribution statement for Factor 3 (\"Tool restrictions in agent definition. Delivery mode in orchestration spawn contract.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ27",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 4 (\"Model pinning lives in the isolation layer — a bonus of the architecture, not a reason for it.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ28",
+    "question": "Does the revision preserve the statement that \"Prompt quality matters more than model tier\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ29",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 5 (\"The orchestration layer determines how the capability is found and triggered.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ30",
+    "question": "Does the revision preserve the explicit distribution statement for Factor 5 (\"Invocation mechanism in orchestration. Operation layer is invocation-agnostic.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ31",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 6 (\"Extract identical behavior into a shared skill when duplication actually appears — not speculatively.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ32",
+    "question": "Does the revision preserve the statement that \"~15–20 is the practical ceiling\" for skill count?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ33",
+    "question": "Does the revision preserve the explicit distribution statement for Factor 6 (\"Shared behavior in a standalone skill loaded by multiple agents. Agent-specific behavior stays per-agent.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ34",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 7 (\"Genuinely incompatible skill requirements get separate agents. Most apparent conflicts are scope problems — fix authoring first.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ35",
+    "question": "Does the revision preserve the explicit rule heading and rule statement for Factor 8 (\"Procedural content belongs in the skill. Exploratory, judgment-heavy content benefits from agent-level framing.\")?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ36",
+    "question": "Does the revision preserve the introductory framing for the 8 factors that each factor is \"a real signal, not absolute\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "ORIG-RQ37",
+    "question": "Does the revision preserve the instruction to load evidence files only \"when a factor's verdict is ambiguous — not preemptively\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "NQ1",
+    "question": "Does the revision preserve the exact wording \"Context Engineering: Three-Layer Architecture + 8-Factor Distribution\" as the document title, rather than dropping \"Context Engineering:\" from the heading?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ2",
+    "question": "Does the revision preserve the phrase \"the three-layer structure\" in the \"Why always three?\" rationale, rather than replacing it with \"the 2-3K token overhead\" alone without specifying what the overhead refers to?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ3",
+    "question": "Does the revision preserve \"working tokens\" as the unit of measure in \"the 10K+ working tokens that any automation-worthy workflow generates,\" rather than shortening it to just \"10K+ tokens\"?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ4",
+    "question": "Does the revision preserve the explicit instruction that step 1 is to read `reference/three-layer-architecture.md` \"for the structural pattern,\" rather than omitting that purpose clause?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ5",
+    "question": "Does the revision preserve \"current prompts\" (with the qualifier \"current\") in step 2 of \"How to Apply,\" rather than dropping the word \"current\"?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ6",
+    "question": "Does the revision preserve the full phrase \"See `reference/three-layer-architecture.md` for guard boilerplate\" in step 4 of \"How to Apply,\" rather than omitting that cross-reference?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ7",
+    "question": "Does the revision preserve the parenthetical description of subfolders — \"(read-only knowledge)\" for `references/`, \"(deterministic executables)\" for `scripts/`, and \"(persistent state)\" for `memory/`\" — rather than omitting all three descriptions?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ8",
+    "question": "Does the revision preserve \"What Stays Where\" as the subtitle for Factor 1 (\"Context Isolation — What Stays Where\"), rather than dropping the subtitle entirely?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ9",
+    "question": "Does the revision preserve \"Task-Dependent Steering\" as the subtitle for Factor 2 (\"Persona — Task-Dependent Steering\"), rather than dropping the subtitle?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ10",
+    "question": "Does the revision preserve \"Tool Restrictions + Delivery Mode\" as the subtitle for Factor 3 (\"Authority Boundaries — Tool Restrictions + Delivery Mode\"), rather than dropping the subtitle?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ11",
+    "question": "Does the revision preserve \"Cost Optimization\" as the subtitle for Factor 4 (\"Model Selection — Cost Optimization\"), rather than dropping the subtitle?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ12",
+    "question": "Does the revision preserve \"Discovery vs Direct\" as the subtitle for Factor 5 (\"Invocation Pattern — Discovery vs Direct\"), rather than dropping the subtitle?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ13",
+    "question": "Does the revision preserve \"Shared Skills\" as the subtitle for Factor 6 (\"Reuse Cardinality — Shared Skills\"), rather than dropping the subtitle?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ14",
+    "question": "Does the revision preserve \"Isolation as Resolution\" as the subtitle for Factor 7 (\"Instruction Conflict — Isolation as Resolution\"), rather than dropping the subtitle?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ15",
+    "question": "Does the revision preserve \"Procedural vs Exploratory\" as the subtitle for Factor 8 (\"Domain Variance — Procedural vs Exploratory\"), rather than dropping the subtitle?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ16",
+    "question": "Does the revision preserve the explicit mention that \"Changing extracted behavior updates all consumers simultaneously\" in Factor 6, rather than omitting this consequence?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ17",
+    "question": "Does the revision preserve the full bullet \"N=1 stays embedded. Extract when duplication actually appears, not speculatively\" as two separate statements in Factor 6, rather than collapsing them into one?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ18",
+    "question": "Does the revision preserve the note that agents can pin `model: haiku` (not only `model: sonnet`) in Factor 4, rather than omitting the haiku option?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ19",
+    "question": "Does the revision preserve the explanation that pinning to tier names \"reduces deprecation churn\" as the stated reason in Factor 4, rather than omitting that rationale?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ20",
+    "question": "Does the revision preserve the explicit mention that \"~19% routing error floor\" applies \"even for best routers\" in Factor 5, rather than dropping the qualifier \"even for best routers\"?",
+    "oracle": "YES",
+    "status": "convergent"
+  },
+  {
+    "id": "NQ21",
+    "question": "Does the revision preserve the bullet \"Skills inherit caller's model\" under Factor 4, rather than omitting it?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ22",
+    "question": "Does the revision preserve the anti-pattern \"Putting context extraction logic in the skill instead of the orchestration layer\" with the full phrase \"instead of the orchestration layer,\" rather than truncating it to just \"in the skill\"?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ23",
+    "question": "Does the revision preserve the anti-pattern \"Passing large diffs or generated content back through layers\" with the specific examples \"large diffs or generated content,\" rather than generalizing to just \"large content\"?",
+    "oracle": "YES",
+    "status": "divergent"
+  },
+  {
+    "id": "NQ24",
+    "question": "Does the revision preserve the full Factor 2 table row for \"Code generation\" as \"Expert acceptable ('write following X patterns')\" rather than dropping the parenthetical example and keeping only \"Expert acceptable\"?",
+    "oracle": "YES",
+    "status": "divergent"
+  }
+]
