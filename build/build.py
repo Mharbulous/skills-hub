@@ -46,10 +46,10 @@ def render(frontmatter, body):
 
 
 def build_skill(skill_dir, harness):
-    frontmatter, body = split_frontmatter((skill_dir / "SKILL.md").read_text())
+    frontmatter, body = split_frontmatter((skill_dir / "SKILL.md").read_text(encoding="utf-8"))
     override = skill_dir / "overrides" / f"{harness}.md"
     if override.exists():
-        o_fm, o_body = split_frontmatter(override.read_text())
+        o_fm, o_body = split_frontmatter(override.read_text(encoding="utf-8"))
         frontmatter = {**frontmatter, **o_fm}
         if o_body.strip():
             body = body.rstrip() + "\n\n" + o_body.strip() + "\n"
@@ -70,7 +70,7 @@ def main():
             _, merged = build_skill(skill_dir, harness)
             out_dir = out_root / skill_dir.name
             shutil.copytree(skill_dir, out_dir, ignore=shutil.ignore_patterns("overrides"))
-            (out_dir / "SKILL.md").write_text(merged)
+            (out_dir / "SKILL.md").write_text(merged, encoding="utf-8")
         with tarfile.open(DIST / harness / "skills.tar.gz", "w:gz") as tar:
             for skill_dir in skill_dirs:
                 tar.add(out_root / skill_dir.name, arcname=skill_dir.name)
@@ -91,7 +91,7 @@ def main():
     (DIST / "index.json").write_text(json.dumps({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "skills": catalog,
-    }, indent=2) + "\n")
+    }, indent=2) + "\n", encoding="utf-8")
 
     print(f"Built {len(skill_dirs)} skill(s) for {', '.join(HARNESSES)} -> {DIST}")
 
