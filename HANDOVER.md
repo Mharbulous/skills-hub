@@ -7,35 +7,32 @@ key_files:
   - bootstrap/cowork-wrapper-template/SKILL.md
 ---
 
-# Handover: skills-hub migration
+# skills-hub
 
 ## Status
 
-Phase 1 (Claude skills bulk migration) is complete. Remaining work is split into
-6 sequential handover files in `handovers/queued/`:
+All skill migrations complete. Firebase Hosting live at https://myskillium.web.app/hub/.
 
-| Order | File | Phase |
-|-------|------|-------|
-| 1 | `001A_codex-skills-migration.md` | Migrate 21 Codex skills, create overrides for 4 overlapping |
-| 2 | `001B_coclerk-domain-skills-migration.md` | Extract and migrate ~32 Coclerk legal practice skills |
-| 3 | `001C_slash-commands-migration.md` | Migrate 12 custom slash commands from `~/.claude/commands/` |
-| 4 | `001D_firebase-hosting-setup.md` | Set up Firebase Hosting, configure secrets, verify deploy |
-| 5 | `001E_wire-environments.md` | Wire Claude sandboxes, CLI, Codex, and Cowork to hosted URL |
-| 6 | `001F_verify-and-cleanup.md` | E2E verification, retire old copies, archive legacy repos |
+**Completed:**
+- 001A: 21 Codex skills migrated (17 new + 3 overrides)
+- 001B: 32 Coclerk legal practice skills migrated (+ 2 cowork overrides)
+- 001C: 3 slash commands migrated (doc-audit, finalize, review-plan) + promote references
+- 001D: Firebase Hosting configured and deployed (103 skills live)
+- 001E: Cowork wrappers generated (103 thin fetchers)
 
-Use `/handover` to process them in order. They form a dependency chain
-(001A -> 001B -> 001C -> 001D -> 001E -> 001F).
+**Remaining:**
+- 002: Commit handover setup files
+- 003: Wire remaining environments (Claude sandboxes, CLI local, Codex) + E2E test
+- Retire old skill locations and archive legacy repos
 
 ## Architecture
 
-Canonical `SKILL.md` per skill + optional per-harness `overrides/{claude,codex}.md`
--> GitHub Action builds per-harness bundles -> Firebase Hosting at unguessable URL
+Canonical `SKILL.md` per skill + optional per-harness `overrides/{claude,codex,cowork}.md`
+-> GitHub Action builds per-harness bundles -> Firebase Hosting at https://myskillium.web.app/hub/
 -> each environment pulls at session start (Cowork fetches at invocation).
 
-## Key Source Locations
+## Build Output
 
-- `C:\Users\Brahm\.codex\skills\` -- 21 Codex skills + AGENTS.md
-- `C:\Users\Brahm\Git\Coclerk\plugins\wrappers\` -- ~32 .skill ZIPs (legal practice tools)
-- `C:\Users\Brahm\.claude\commands\` -- 12 custom slash commands
-- `C:\Users\Brahm\Git\skills-hub\build\build.py` -- build script
-- `C:\Users\Brahm\Git\skills-hub\bootstrap\` -- environment setup scripts
+- `dist/claude/skills.tar.gz` — Claude harness bundle
+- `dist/codex/skills.tar.gz` — Codex harness bundle
+- `dist/index.json` — skill catalog with descriptions and SHA-256 hashes
