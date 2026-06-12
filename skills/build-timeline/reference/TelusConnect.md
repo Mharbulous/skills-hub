@@ -1,0 +1,172 @@
+# Telus Business Connect Reference
+
+Data format and handling details for Telus Business Connect integration. Load this file when parsing Telus CSV data for the timeline.
+
+## Configuration
+
+No API configuration needed — the practitioner supplies a CSV file path when available. If no CSV is provided, skip and record `"telus"` in `sources_failed`. This is expected — Telus data is not always available.
+
+## CSV Format
+
+Expected columns: Date, Time, Duration, Phone Number, Direction (Inbound/Outbound), Contact Name (if available).
+
+## Activity Types
+
+Telus Business Connect tracks more than just calls. Each record's `raw_type` is set from the subtype column (or inferred from context) — these are raw source classifications, not interpretations:
+- **phone_call** (inbound/outbound call)
+- **voicemail** (listening to messages)
+- **text** (SMS communication)
+- **fax** (sending/receiving)
+
+## Computing native_id
+
+Telus Business Connect CSV exports may or may not include a stable call identifier column. Before implementing:
+
+1. Inspect an actual Telus Business Connect CSV export. If a `Call ID` or `call_id` column is present and contains a stable, unique identifier per record, use it directly: `native_id = call_id`.
+2. If no stable ID column exists, compose a deterministic key from immutable fields: `native_id = "{date}T{time}_{phone_number}_{direction}"`, e.g. `"2026-04-15T14:30:00_+16045551234_Inbound"`.
+3. Whichever form is used, document it here so the composite is reproducible across runs (re-fetch idempotency depends on stable IDs).
+
+The stable row ID is `telus:{native_id}`.
+
+> **TODO (Telus implementer):** Confirm which form to use by inspecting a real Telus Business Connect CSV before deploying.
+
+## CSV Validation & Error Handling
+
+The Telus CSV file is user-supplied and may contain formatting issues, missing columns, or encoding problems. Always validate before parsing and report errors explicitly to the practitioner.
+
+### Expected CSV Format
+
+**Required columns (case-insensitive, whitespace-trimmed):**
+
+| Column | Format | Required | Example |
+|--------|--------|----------|---------|
+| Date | YYYY-MM-DD or MM/DD/YYYY | Yes | 2026-04-13 |
+| Time | HH:MM or HH:MM:SS | Yes | 14:30 or 14:30:45 |
+| Duration | HH:MM:SS or MM:SS or minutes as number | Yes | 00:03:45 or 3:45 or 225 |
+| Phone Number | E.164 (+1XXXXXXXXXX) or local (XXX)XXX-XXXX or variations | Yes | +16045551234 or (604) 555-1234 |
+| Direction | "Inbound" or "Outbound" (case-insensitive) | Yes | Inbound |
+| Contact Name | Any string | No (may be empty/absent) | John Smith |
+
+**Optional columns** (ignored if present): Call ID, Duration (in seconds), Type, Notes, Call Status, etc.
+
+**Encoding:** UTF-8 required. If BOM present (UTF-8 with BOM), strip it during parse.
+
+**Line endings:** LF (\n), CRLF (\r\n), or CR (\r) all acceptable.
+
+### Validation Rules
+
+**Before parsing CSV:**
+
+1. **File exists** — If path does not exist, error: "Telus CSV file not found at {path}. Check the file path and try again."
+2. **Readable** — If file cannot be opened, error: "Cannot read Telus CSV file at {path}. Check file permissions."
+3. **Encoding** — Try UTF-8 decode. If decode fails, error: "Telus CSV file is not UTF-8 encoded. Please save the file as UTF-8 and try again."
+
+**During CSV parse:**
+
+1. **Header row present** — First non-blank line must contain column names. If header missing, error: "Telus CSV has no header row. Expected columns: Date, Time, Duration, Phone Number, Direction, Contact Name"
+
+2. **Required columns exist** — Check that Date, Time, Duration, Phone Number, Direction columns exist (case-insensitive match, trim whitespace). If any missing, error: "Telus CSV is missing required column(s): {list missing columns}. Found columns: {list actual columns}"
+
+3. **No empty required columns** — For each data row, check that Date, Time, Duration, Phone Number, Direction are non-empty after stripping whitespace. If empty in any row:
+   - Error: "Telus CSV row {line_number} has empty {column_name}. All rows must have Date, Time, Duration, Phone Number, and Direction."
+
+4. **Blank/comment rows** — Skip rows where all columns are empty or where the first non-whitespace character is `#`.
+
+### Field Validation & Parsing
+
+**Date field:**
+
+- Accept YYYY-MM-DD (preferred) or MM/DD/YYYY
+- Parse ISO format directly: `datetime.fromisoformat("2026-04-13")`
+- For MM/DD/YYYY, parse then convert: `datetime.strptime(value, "%m/%d/%Y").date()`
+- If parse fails: error in that row — "Invalid date '{value}' at row {line}. Expected YYYY-MM-DD or MM/DD/YYYY"
+- Reject impossible dates (e.g., 02/30/2026, 13/01/2026)
+
+**Time field:**
+
+- Accept HH:MM or HH:MM:SS (24-hour format)
+- Parse using `datetime.strptime(value, "%H:%M")` or `"%H:%M:%S"`
+- If parse fails: error in that row — "Invalid time '{value}' at row {line}. Expected HH:MM or HH:MM:SS in 24-hour format (e.g., 14:30 or 14:30:45)"
+- Reject invalid times (e.g., 25:00, 14:60)
+
+**Duration field:**
+
+- Accept formats:
+  - HH:MM:SS (preferred, e.g., 00:03:45)
+  - MM:SS (e.g., 3:45 = 3 minutes 45 seconds)
+  - Bare number interpreted as seconds (e.g., 225 = 225 seconds = 3:45)
+  - Bare number with "s" suffix (e.g., 225s)
+- Parse and convert to total seconds:
+  - HH:MM:SS → `int(HH) * 3600 + int(MM) * 60 + int(SS)`
+  - MM:SS → `int(MM) * 60 + int(SS)`
+  - Bare number → `int(value)` (interpret as seconds)
+- Reject zero or negative durations: "Duration must be positive at row {line}. Got '{value}'"
+- Reject durations > 8 hours (28800 seconds): "Duration exceeds 8 hours at row {line}. Got '{value}' — check for malformed data"
+- If parse fails: "Invalid duration '{value}' at row {line}. Expected HH:MM:SS, MM:SS, or seconds as number (e.g., 00:03:45, 3:45, or 225)"
+
+**Phone Number field:**
+
+- Accept formats:
+  - E.164 with +1 (preferred): +1XXXXXXXXXX (11 digits for North America)
+  - Parentheses + hyphen: (XXX) XXX-XXXX or (XXX)XXX-XXXX
+  - Dots: XXX.XXX.XXXX
+  - Spaces: XXX XXX XXXX or +1 XXX XXX XXXX
+  - Bare digits: XXXXXXXXXX (10 digits, assume North America)
+- Normalize:
+  - Strip all non-digit characters except leading `+`
+  - If starts with +1, keep as-is
+  - If starts with 1 (after stripping), prepend +
+  - If exactly 10 digits, prepend +1
+  - If not 10 or 11 digits after normalization: error in that row — "Invalid phone number '{value}' at row {line}. Expected 10-digit North American number or E.164 format (+1XXXXXXXXXX)"
+- Store normalized as E.164 in the timeline row's `raw_payload`
+- Unknown/internal numbers (e.g., 0000000000, 1111111111, 5555555555): warn but allow — "Phone number {value} at row {line} looks internal/test — included as-is"
+
+**Direction field:**
+
+- Accept (case-insensitive): "Inbound", "Outbound", "In", "Out", "→", "←"
+- Normalize to "Inbound" or "Outbound"
+- If unrecognized: error in that row — "Invalid direction '{value}' at row {line}. Expected Inbound or Outbound"
+
+**Contact Name field (optional):**
+
+- If missing or empty, assign empty string `""`
+- If present, strip leading/trailing whitespace
+- No validation — any non-empty string allowed
+
+### Error Handling Strategy
+
+**On validation error:**
+
+1. **Stop parsing immediately** — Do not attempt to salvage the file or skip bad rows
+2. **Report the error message to the practitioner** — Explicit line number, column, value, and expected format
+3. **Do NOT silently omit rows** — Silent failures hide data and corrupt the timeline
+4. **Record "telus" in `sources_failed`** — Build continues without Telus data; report includes this failure
+5. **Example message to practitioner:**
+
+   ```
+   Telus CSV error: Invalid date '2026-13-45' at row 2.
+   Expected YYYY-MM-DD or MM/DD/YYYY.
+   
+   Please fix the date and try again, or skip Telus data for this build.
+   ```
+
+### Graceful Degradation
+
+If Telus CSV cannot be parsed:
+
+- Record "telus" in `sources_failed` (not `sources_fetched`)
+- Continue the build with available sources (TimeCamp, Google Calendar)
+- Include a note in the final report: "Note: Telus data not available — phone calls are not included in this timeline build."
+- The practitioner can re-import Telus data later via "Re-import Telus CSV at {path} for {date}"
+
+### Logging
+
+For debugging/audit purposes, log (but do not present unless requested):
+
+- File path and size
+- Encoding detected
+- Columns found in header
+- Row count (including skipped blank/comment rows)
+- Validation errors (first error, then halt)
+- Successful rows parsed
+- Example: "Parsed Telus CSV: 47 rows, 45 valid entries, 2 blank rows skipped, encoding UTF-8"

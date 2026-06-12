@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Form 62 — Bill of Costs</title>
+  <style>
+    /* ── Reset ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Page background ────────────────────────────────────────────── */
+    body {
+      background: #e8e8e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      font-family: 'Times New Roman', Times, serif;
+    }
+
+    /* ── Paper ──────────────────────────────────────────────────────── */
+    .paper {
+      width: 780px;
+      background: #ffffff;
+      box-shadow:
+        0 1px 3px rgba(0,0,0,.10),
+        0 4px 16px rgba(0,0,0,.12);
+      padding: 64px 72px 72px;
+    }
+
+    @media print {
+      body  { background: none; padding: 0; }
+      .paper { box-shadow: none; padding: 30px 50px; width: 100%; }
+      .print-btn { display: none; }
+    }
+
+    /* ── Document header ────────────────────────────────────────────── */
+    .form-ref {
+      text-align: center;
+      font-size: 13.5px;
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+    .style-of-proceeding {
+      text-align: center;
+      font-style: italic;
+      font-size: 13px;
+      margin: 5px 0;
+    }
+    .doc-title {
+      text-align: center;
+      font-size: 16px;
+      font-weight: bold;
+      letter-spacing: .10em;
+      text-transform: uppercase;
+      margin: 8px 0 9px;
+    }
+    .rule-note {
+      text-align: center;
+      font-style: italic;
+      font-size: 11.5px;
+      margin-bottom: 26px;
+    }
+
+    /* ── Editable fields ────────────────────────────────────────────── */
+    /*
+       BC Supreme Court convention: underlining = amendment marker.
+       Fields carry NO border, NO underline, NO background fill.
+       Empty state is communicated entirely by the placeholder dots,
+       matching the "........." notation used on the printed court form.
+    */
+    input[type="text"],
+    input[type="number"] {
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 13px;
+      color: #111;
+      padding: 1px 0;
+      vertical-align: baseline;
+    }
+    /* Subtle highlight on focus so the active field is visible on screen.
+       Disappears on print. */
+    input:focus {
+      background: rgba(44, 95, 158, 0.06);
+      border-radius: 2px;
+    }
+    /* Dots are dark so they read like the printed form, not like a
+       greyed-out hint. Letter-spacing opens them up slightly. */
+    input::placeholder {
+      color: #555;
+      font-style: normal;
+      letter-spacing: 0.05em;
+    }
+    /* suppress number spinners */
+    input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+    @media print {
+      input:focus { background: transparent; }
+    }
+
+    /* ── Preamble lines ─────────────────────────────────────────────── */
+    .preamble {
+      font-size: 13px;
+      line-height: 2.2;
+    }
+    .f-name  { width: 280px; }
+    .f-scale { width: 80px;  }
+    .f-unit  { width: 80px; text-align: right; }
+
+    /* ── Section headings ───────────────────────────────────────────── */
+    .section-heading {
+      font-size: 13.5px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin: 26px 0 8px;
+    }
+
+    /* ── Tables — no horizontal or vertical rules ───────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    /* column widths — tariff */
+    .tariff-table col.c-item  { width: 52px;  }
+    .tariff-table col.c-desc  { width: auto;  }
+    .tariff-table col.c-claim { width: 118px; }
+    .tariff-table col.c-allow { width: 118px; }
+    .tariff-table col.c-grand { width: 104px; }
+
+    /* column widths — disbursements */
+    .disb-table col.c-pad   { width: 52px;  }
+    .disb-table col.c-desc  { width: auto;  }
+    .disb-table col.c-claim { width: 118px; }
+    .disb-table col.c-allow { width: 118px; }
+    .disb-table col.c-grand { width: 104px; }
+
+    thead th {
+      font-size: 12.5px;
+      font-weight: bold;
+      padding: 2px 6px 6px;
+      text-align: left;
+      /* deliberately no border */
+    }
+    thead th.c { text-align: center; }
+
+    tbody td {
+      padding: 3px 5px;
+      vertical-align: baseline;
+    }
+    tbody tr.data-row td {
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+    tbody tr.spacer { height: 8px; }
+    tbody tr.calc-row td { padding-top: 2px; padding-bottom: 2px; }
+    /* total-row: bold only — no top rule */
+    tbody tr.total-row td {
+      font-weight: bold;
+      padding-top: 6px;
+    }
+
+    /* ── Field widths inside tables ─────────────────────────────────── */
+    .f-item  { width: 36px;  text-align: center; }
+    .f-desc  { width: 100%; }
+    /* f-units and f-money are the same width so inputs in a column
+       share an identical right edge regardless of whether a $ prefix
+       is present in the same cell. */
+    .f-units { width: 76px;  text-align: right;  }
+    .f-money { width: 76px;  text-align: right;  }
+    .f-grand { width: 84px;  text-align: right;  }
+
+    .c { text-align: center; }
+    .r { text-align: right;  }
+    /* amount cells: right-aligned so the right edge of every input
+       in the column is flush, whether or not a $ prefix is present */
+    .amt { text-align: right; white-space: nowrap; }
+
+    .label-r {
+      text-align: right;
+      padding-right: 10px;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    .dollar { font-size: 13px; padding-right: 1px; }
+
+    /* ── Total Allowed ──────────────────────────────────────────────── */
+    /* Row is appended inside the disbursements table — column widths are
+       shared automatically, no separate layout needed. */
+
+    /* ── Signature block ────────────────────────────────────────────── */
+    /*
+      Grid layout: 2 columns × 2 rows.
+        [date input]   [rule]
+        [empty]        [caption]
+      align-items: center vertically centers each item within its row track,
+      so the 1px rule lands exactly at the midpoint of the date input height —
+      no padding guesswork needed.
+    */
+    .sig-block {
+      margin-top: 48px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto;
+      column-gap: 32px;
+      align-items: center;
+      font-size: 12.5px;
+    }
+    .sig-date  { white-space: nowrap; }
+    .sig-rule  { width: 100%; height: 1px; background: #555; }
+    .sig-caption { font-size: 11px; text-align: center; padding-top: 4px; }
+
+    /* ── Print button ───────────────────────────────────────────────── */
+    .print-btn {
+      margin-top: 28px;
+      padding: 9px 30px;
+      background: #2c5f9e;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: .04em;
+      box-shadow: 0 2px 6px rgba(0,0,0,.22);
+      transition: background .15s;
+    }
+    .print-btn:hover { background: #224d82; }
+  </style>
+</head>
+<body>
+
+<div class="paper">
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <p class="form-ref">Form 62 (Rule 14-1 (20))</p>
+  <p class="style-of-proceeding">[Style of Proceeding]</p>
+  <p class="doc-title">Bill of Costs</p>
+  <p class="rule-note">[Rule 22-3 of the Supreme Court Civil Rules applies to all forms.]</p>
+
+  <!-- ── Preamble ────────────────────────────────────────────────────── -->
+  <p class="preamble">
+    This is the bill of costs of:&nbsp;
+    <input type="text" class="f-name" placeholder="..............................[name(s)].............................." aria-label="Name(s)" />
+  </p>
+  <p class="preamble">
+    Tariff scale&nbsp;
+    <input type="text" class="f-scale" placeholder="............" aria-label="Tariff scale" />
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    Unit value&nbsp;$<input type="text" class="f-unit" placeholder="............" aria-label="Unit value" />
+  </p>
+
+  <!-- ── Tariff Items ─────────────────────────────────────────────────── -->
+  <p class="section-heading">Tariff Items</p>
+
+  <table class="tariff-table">
+    <colgroup>
+      <col class="c-item" />
+      <col class="c-desc" />
+      <col class="c-claim" />
+      <col class="c-allow" />
+      <col class="c-grand" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Item&nbsp;#</th>
+        <th>Description</th>
+        <th class="c"># of Units Claimed</th>
+        <th class="c"># of Units Allowed</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td class="c"><input type="text"   class="f-item"  placeholder="......" /></td>
+        <td>          <input type="text"   class="f-desc"  placeholder="................................................" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." /></td>
+        <td></td>
+      </tr>
+
+      <tr class="spacer"><td colspan="5"></td></tr>
+
+      <tr class="calc-row">
+        <td colspan="2" class="label-r">Total number of units:</td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." aria-label="Total units claimed" /></td>
+        <td class="amt"><input type="number" class="f-units" min="0" step="0.5" placeholder="........." aria-label="Total units allowed" /></td>
+        <td></td>
+      </tr>
+      <tr class="calc-row">
+        <td colspan="2" class="label-r">Multiply by unit value:</td>
+        <td class="amt"><input type="text" class="f-units" placeholder="........." aria-label="Unit value (claimed)" /></td>
+        <td class="amt"><input type="text" class="f-units" placeholder="........." aria-label="Unit value (allowed)" /></td>
+        <td></td>
+      </tr>
+      <tr class="calc-row">
+        <td colspan="2" class="label-r">Subtotal:</td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Subtotal claimed" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Subtotal allowed" /></td>
+        <td></td>
+      </tr>
+      <tr class="calc-row">
+        <td colspan="2" class="label-r">Applicable taxes:</td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Taxes claimed" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Taxes allowed" /></td>
+        <td></td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="2" class="label-r">Total:</td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Total tariff claimed" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Total tariff allowed" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-grand" placeholder="............" aria-label="Total tariff (grand)" /></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── Disbursements ────────────────────────────────────────────────── -->
+  <p class="section-heading">Disbursements</p>
+
+  <table class="disb-table">
+    <colgroup>
+      <col class="c-pad" />
+      <col class="c-desc" />
+      <col class="c-claim" />
+      <col class="c-allow" />
+      <col class="c-grand" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Description</th>
+        <th class="c">Claimed</th>
+        <th class="c">Allowed</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="data-row">
+        <td></td>
+        <td><input type="text" class="f-desc" placeholder="................................................" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td></td>
+        <td><input type="text" class="f-desc" placeholder="................................................" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td></td>
+        <td><input type="text" class="f-desc" placeholder="................................................" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td></td>
+        <td><input type="text" class="f-desc" placeholder="................................................" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td></td>
+        <td><input type="text" class="f-desc" placeholder="................................................" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td></td>
+      </tr>
+      <tr class="data-row">
+        <td></td>
+        <td><input type="text" class="f-desc" placeholder="................................................" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" /></td>
+        <td></td>
+      </tr>
+
+      <tr class="spacer"><td colspan="5"></td></tr>
+
+      <tr class="calc-row">
+        <td></td>
+        <td class="label-r">Applicable taxes:</td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Disbursement taxes claimed" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Disbursement taxes allowed" /></td>
+        <td></td>
+      </tr>
+      <tr class="total-row">
+        <td></td>
+        <td class="label-r">Total:</td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Total disbursements claimed" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Total disbursements allowed" /></td>
+        <td class="amt"><span class="dollar">$</span><input type="text" class="f-grand" placeholder="............" aria-label="Total disbursements (grand)" /></td>
+      </tr>
+
+      <!-- TOTAL ALLOWED lives inside this table so column widths are shared exactly -->
+      <tr class="total-row">
+        <td colspan="2" style="padding-top:20px; font-size:14px; text-transform:uppercase; font-weight:bold; letter-spacing:.07em; white-space:nowrap;">Total Allowed</td>
+        <td style="padding-top:20px;"></td><!-- Claimed column intentionally blank -->
+        <td class="amt" style="padding-top:20px;"><span class="dollar">$</span><input type="text" class="f-money" placeholder="............" aria-label="Total allowed (allowed column)" /></td>
+        <td class="amt" style="padding-top:20px;"><span class="dollar">$</span><input type="text" class="f-grand" placeholder="............" aria-label="Total allowed (grand)" /></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── Signature block ───────────────────────────────────────────────── -->
+  <!-- Grid: col1=date, col2=rule (row1) / caption (row2) -->
+  <div class="sig-block">
+    <span class="sig-date">Date:&nbsp;<input type="text" id="form-date" style="width:148px;" aria-label="Date" /></span>
+    <div class="sig-rule"></div>
+    <span></span><!-- empty — keeps date cell out of row 2 -->
+    <span class="sig-caption">Signature of assessing officer</span>
+  </div>
+
+</div><!-- /.paper -->
+
+<button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+
+<script>
+  (function () {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const now = new Date();
+    const dd  = String(now.getDate()).padStart(2, '0');
+    const mmm = months[now.getMonth()];
+    const yyyy = now.getFullYear();
+    document.getElementById('form-date').value = dd + '/' + mmm + '/' + yyyy;
+  })();
+</script>
+
+</body>
+</html>
