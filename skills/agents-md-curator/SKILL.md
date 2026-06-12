@@ -21,7 +21,7 @@ Discovery is automatic via `scripts/discover_managed_files.py` — no registrati
 
 ## Storage
 
-Materialize this skill folder from the full install or Myskillium per-skill
+Materialize this skill folder from the full install or Skills-hub per-skill
 tarball before running bundled scripts or reading bundled support files.
 
 ```

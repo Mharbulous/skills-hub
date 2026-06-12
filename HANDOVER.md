@@ -7,11 +7,11 @@ key_files:
   - bootstrap/cowork-wrapper-template/SKILL.md
 ---
 
-# skills-hub
+# Skills-hub
 
 ## Status
 
-All skill migrations complete. Firebase Hosting live at https://myskillium.web.app/hub/.
+All skill migrations complete. Firebase Hosting live at https://skills-hub.web.app/hub/.
 
 **Completed:**
 - 001A: 21 Codex skills migrated (17 new + 3 overrides)
@@ -28,7 +28,7 @@ All skill migrations complete. Firebase Hosting live at https://myskillium.web.a
 ## Architecture
 
 Canonical `SKILL.md` per skill + optional per-harness `overrides/{claude,codex,cowork}.md`
--> GitHub Action builds per-harness bundles -> Firebase Hosting at https://myskillium.web.app/hub/
+-> GitHub Action builds per-harness bundles -> Firebase Hosting at https://skills-hub.web.app/hub/
 -> each environment pulls at session start (Cowork fetches at invocation).
 
 ## Build Output

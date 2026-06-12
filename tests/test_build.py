@@ -5,6 +5,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+import zipfile
 from pathlib import Path
 from pathlib import PurePosixPath
 
@@ -12,7 +13,7 @@ import pytest
 
 
 def load_build_module():
-    spec = importlib.util.spec_from_file_location("myskillium_build", "build/build.py")
+    spec = importlib.util.spec_from_file_location("skills_hub_build", "build/build.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -27,7 +28,7 @@ def make_temp_dir(prefix):
 @pytest.fixture(scope="session")
 def built_dist():
     module = load_build_module()
-    temp_root = make_temp_dir("myskillium-build-")
+    temp_root = make_temp_dir("skills-hub-build-")
     module.DIST = temp_root / "dist"
     try:
         module.main()
@@ -76,6 +77,14 @@ def test_every_skill_has_full_stub_tarball_and_index_entry(built_dist):
             assert harness_entry["tarball_path"] == f"{harness}/skills/{skill_name}.tar.gz"
             assert "manifest_path" not in harness_entry
             assert "manifest_sha256" not in harness_entry
+            if harness == "cowork":
+                package_path = dist / "cowork" / "skill-packages" / f"{skill_name}.skill"
+                assert package_path.is_file()
+                assert harness_entry["package_path"] == f"cowork/skill-packages/{skill_name}.skill"
+                assert harness_entry["package_sha256"] == sha256(package_path)
+            else:
+                assert "package_path" not in harness_entry
+                assert "package_sha256" not in harness_entry
 
 
 def test_manifest_covers_generated_files_and_catalog(built_dist):
@@ -86,7 +95,7 @@ def test_manifest_covers_generated_files_and_catalog(built_dist):
     assert manifest["max_age_seconds"] > 0
     assert manifest["skills"]
     assert "index.json" in manifest["files"]
-    assert "bootstrap/myskillium_allowed_signers" in manifest["files"]
+    assert "bootstrap/skills_hub_allowed_signers" in manifest["files"]
 
     expected_files = {
         path.relative_to(dist).as_posix()
@@ -141,10 +150,10 @@ def test_stub_frontmatter_matches_merged_frontmatter_and_urls(built_dist):
         read_text(dist / "cowork" / "skills" / "handover" / "SKILL.md")
     )
     assert cowork_fm == cowork_full_fm
-    assert "python myskillium-fetch.py cowork handover" in cowork_body
-    assert "Do not fetch\nMyskillium URLs directly" in cowork_body
-    assert (dist / "cowork" / "stubs" / "handover" / "myskillium-fetch.py").is_file()
-    assert (dist / "cowork" / "stubs" / "handover" / "myskillium_allowed_signers").is_file()
+    assert "python skills-hub-fetch.py cowork handover" in cowork_body
+    assert "Do not fetch\nSkills-hub URLs directly" in cowork_body
+    assert (dist / "cowork" / "stubs" / "handover" / "skills-hub-fetch.py").is_file()
+    assert (dist / "cowork" / "stubs" / "handover" / "skills_hub_allowed_signers").is_file()
 
 
 def test_stub_bundle_contains_only_stub_skill_files_and_full_bundles_keep_subfiles(built_dist):
@@ -163,8 +172,8 @@ def test_stub_bundle_contains_only_stub_skill_files_and_full_bundles_keep_subfil
         cowork_members = set(tar.getnames())
     for skill_name in names:
         assert f"{skill_name}/SKILL.md" in cowork_members
-        assert f"{skill_name}/myskillium-fetch.py" in cowork_members
-        assert f"{skill_name}/myskillium_allowed_signers" in cowork_members
+        assert f"{skill_name}/skills-hub-fetch.py" in cowork_members
+        assert f"{skill_name}/skills_hub_allowed_signers" in cowork_members
 
     with tarfile.open(dist / "claude" / "skills.tar.gz", "r:gz") as tar:
         full_members = set(tar.getnames())
@@ -175,6 +184,27 @@ def test_stub_bundle_contains_only_stub_skill_files_and_full_bundles_keep_subfil
         handover_members = set(tar.getnames())
     assert "handover/SKILL.md" in handover_members
     assert "handover/scripts/handover_selector.py" in handover_members
+
+
+def test_cowork_skill_packages_match_generated_stubs(built_dist):
+    module, dist = built_dist
+    names = skill_names(module)
+
+    for skill_name in names:
+        package_path = dist / "cowork" / "skill-packages" / f"{skill_name}.skill"
+        stub_root = dist / "cowork" / "stubs" / skill_name
+        expected_members = [
+            f"{skill_name}/SKILL.md",
+            f"{skill_name}/skills-hub-fetch.py",
+            f"{skill_name}/skills_hub_allowed_signers",
+        ]
+
+        with zipfile.ZipFile(package_path) as zf:
+            assert zf.namelist() == expected_members
+            assert all("\\" not in name for name in zf.namelist())
+            for member in expected_members:
+                local_name = member.split("/", 1)[1]
+                assert zf.read(member) == (stub_root / local_name).read_bytes()
 
 
 def test_no_dot_prefixed_paths_are_generated(built_dist):

@@ -4,7 +4,7 @@ description: Capture screenshots of visible Windows desktop application windows 
 
 ## Codex Usage
 
-Materialize this skill folder from the full install or Myskillium per-skill
+Materialize this skill folder from the full install or Skills-hub per-skill
 tarball, set `SKILL_DIR` to that extracted folder, and use the bundled CLI
 (PowerShell):
 

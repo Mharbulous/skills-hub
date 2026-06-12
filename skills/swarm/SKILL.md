@@ -65,7 +65,7 @@ Dispatch differs by whether a skill was specified.
 
 ### Path A: Skill specified (paste-body + warmup-then-parallel)
 
-1. **Read the skill body once.** Locate the resolved skill's `SKILL.md`; for Myskillium stubs, first fetch the authoritative body with the stub protocol. Read it in full. Hold the content in orchestrator context as `<SKILL_BODY>`.
+1. **Read the skill body once.** Locate the resolved skill's `SKILL.md`; for Skills-hub stubs, first fetch the authoritative body with the stub protocol. Read it in full. Hold the content in orchestrator context as `<SKILL_BODY>`.
 2. **Build the per-spawn prompt** using the template below. The shared prefix (`<SKILL_BODY>` + boilerplate) must be **byte-identical across all spawns** — only the trailing per-file section varies. This is the portion that lands in the cached prefix.
 3. **Warmup spawn (serial)**: dispatch ONE Agent call (`subagent_type: general-purpose`, or `agent:<name>` override) for the first file. Wait for completion. This populates the cache.
 4. **Parallel tail**: dispatch the remaining N−1 Agent calls in a single message, same `subagent_type`, same shared prefix. They hit the cache written by the warmup spawn.

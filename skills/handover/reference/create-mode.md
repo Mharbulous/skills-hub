@@ -237,7 +237,7 @@ Handovers describe **what** to do and **why**, never **how**. The executing agen
 Create the folder structure if it doesn't exist: `handovers/queued/`, `handovers/WIP/`, `handovers/completed/`
 
 Before running helper scripts, set `SKILL_DIR` to the materialized handover
-skill folder from the full install or Myskillium per-skill tarball.
+skill folder from the full install or Skills-hub per-skill tarball.
 
 **Single handover:**
 

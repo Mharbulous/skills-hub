@@ -16,7 +16,7 @@ Analyze prompts across four dimensions, provide scores, and generate actionable 
 
 When user provides a skill name (e.g., "scoping", "handover"):
 
-1. **First**: Resolve the harness's native skill entry for `{skill-name}`. If it is a Myskillium stub, fetch the authoritative `SKILL.md` with the stub protocol before analyzing.
+1. **First**: Resolve the harness's native skill entry for `{skill-name}`. If it is a Skills-hub stub, fetch the authoritative `SKILL.md` with the stub protocol before analyzing.
 
 2. **Second**: Check project-local skills:
    - `.claude\skills\{skill-name}\SKILL.md` (relative to working directory)

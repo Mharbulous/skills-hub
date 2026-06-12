@@ -24,7 +24,7 @@ def require_tools():
 def work_tmp():
     parent = ROOT / ".test-tmp"
     parent.mkdir(parents=True, exist_ok=True)
-    path = Path(tempfile.mkdtemp(prefix="myskillium-resolver-", dir=parent))
+    path = Path(tempfile.mkdtemp(prefix="skills-hub-resolver-", dir=parent))
     try:
         yield path
     finally:
@@ -58,14 +58,14 @@ def make_signing_key(temp_root):
     require_tools()
     key_path = temp_root / "signing_key"
     subprocess.run(
-        ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "myskillium-test", "-f", str(key_path)],
+        ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "skills-hub-test", "-f", str(key_path)],
         check=True,
         capture_output=True,
         text=True,
     )
     allowed_signers = temp_root / "allowed_signers"
     pub = (key_path.with_suffix(".pub")).read_text(encoding="utf-8").strip()
-    allowed_signers.write_text(f"myskillium-manifest {pub}\n", encoding="utf-8")
+    allowed_signers.write_text(f"skills-hub-manifest {pub}\n", encoding="utf-8")
     return key_path, allowed_signers
 
 
@@ -86,7 +86,7 @@ def write_manifest(base, key_path, max_age_seconds=604800):
     manifest_path = base / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     subprocess.run(
-        ["ssh-keygen", "-Y", "sign", "-f", str(key_path), "-n", "myskillium-manifest", str(manifest_path)],
+        ["ssh-keygen", "-Y", "sign", "-f", str(key_path), "-n", "skills-hub-manifest", str(manifest_path)],
         check=True,
         capture_output=True,
         text=True,
@@ -105,7 +105,7 @@ def run_fetch(base_url, allowed_signers, cache_dir, check=True):
     return subprocess.run(
         [
             sys.executable,
-            str(ROOT / "bootstrap" / "myskillium-fetch.py"),
+            str(ROOT / "bootstrap" / "skills-hub-fetch.py"),
             "cowork",
             "alpha",
             "--base-url",
@@ -161,7 +161,7 @@ def test_resolver_rejects_stale_cache_when_manifest_unavailable(work_tmp):
     cache = work_tmp / "cache"
     first = run_fetch(base.resolve().as_uri(), allowed_signers, cache)
     skill_md = Path(first.stdout.strip())
-    meta_path = skill_md.parent.parent / "myskillium-cache.json"
+    meta_path = skill_md.parent.parent / "skills-hub-cache.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     meta["generated_at"] = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     meta["max_age_seconds"] = 1

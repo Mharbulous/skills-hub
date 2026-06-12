@@ -56,7 +56,7 @@ The write script uses Firestore `update()`, so unlisted fields are preserved aut
 
 ## Procedure
 
-Materialize this skill folder from the full install or Myskillium per-skill
+Materialize this skill folder from the full install or Skills-hub per-skill
 tarball and set `SKILL_DIR` to that folder before running helper scripts.
 
 ### Step 1 -- Pre-check (triage)

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Install verified Myskillium skills into a Claude Code environment.
+# Install verified Skills-hub skills into a Claude Code environment.
 #
 # Usage:
-#   SKILLS_BASE_URL="https://myskillium.web.app/hub" ./claude-setup.sh [--full] [dest]
+#   SKILLS_BASE_URL="https://skills-hub.web.app/hub" ./claude-setup.sh [--full] [dest]
 #
 # Default installs the full verified bundle before skill enumeration. --full is
 # accepted as a compatibility alias.
@@ -15,8 +15,8 @@ DEFAULT_DEST="$HOME/.claude/skills"
 FULL=1
 DEST=""
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-VERIFY_SCRIPT="$SCRIPT_DIR/myskillium_verify.py"
-ALLOWED_SIGNERS="${MYSKILLIUM_ALLOWED_SIGNERS:-$SCRIPT_DIR/myskillium_allowed_signers}"
+VERIFY_SCRIPT="$SCRIPT_DIR/skills_hub_verify.py"
+ALLOWED_SIGNERS="${SKILLS_HUB_ALLOWED_SIGNERS:-$SCRIPT_DIR/skills_hub_allowed_signers}"
 
 usage() {
   echo "Usage: SKILLS_BASE_URL=<base-url> $0 [--full] [dest]" >&2
@@ -30,7 +30,7 @@ find_python() {
       return
     fi
   done
-  echo "python3 or python is required for Myskillium manifest verification" >&2
+  echo "python3 or python is required for Skills-hub manifest verification" >&2
   exit 1
 }
 
@@ -59,7 +59,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 PYTHON_BIN="$(find_python)"
-BASE_URL="${SKILLS_BASE_URL:?Set SKILLS_BASE_URL to https://myskillium.web.app/hub}"
+BASE_URL="${SKILLS_BASE_URL:?Set SKILLS_BASE_URL to https://skills-hub.web.app/hub}"
 BASE_URL="${BASE_URL%/}"
 DEST="${DEST:-$DEFAULT_DEST}"
 ARCHIVE_NAME="skills.tar.gz"
@@ -67,10 +67,10 @@ ARCHIVE_PATH="$HARNESS/$ARCHIVE_NAME"
 ARCHIVE_URL="$BASE_URL/$ARCHIVE_PATH"
 MANIFEST_URL="$BASE_URL/manifest.json"
 SIGNATURE_URL="$BASE_URL/manifest.json.sig"
-MARKER="$DEST/.myskillium-managed-skills"
+MARKER="$DEST/.skills-hub-managed-skills"
 
 TMP_PARENT="${TMPDIR:-/tmp}"
-TMP_ROOT="$TMP_PARENT/myskillium-bootstrap-$$-${RANDOM:-0}"
+TMP_ROOT="$TMP_PARENT/skills-hub-bootstrap-$$-${RANDOM:-0}"
 mkdir -p "$TMP_ROOT"
 cleanup() {
   rm -rf "$TMP_ROOT"
@@ -94,8 +94,8 @@ if ! curl -fsSL "$SIGNATURE_URL" -o "$SIGNATURE_FILE"; then
   exit 1
 fi
 
-if ! ssh-keygen -Y verify -f "$ALLOWED_SIGNERS" -I myskillium-manifest -n myskillium-manifest -s "$SIGNATURE_FILE" < "$MANIFEST_FILE" >/dev/null; then
-  echo "Myskillium manifest signature verification failed. Existing install left unchanged." >&2
+if ! ssh-keygen -Y verify -f "$ALLOWED_SIGNERS" -I skills-hub-manifest -n skills-hub-manifest -s "$SIGNATURE_FILE" < "$MANIFEST_FILE" >/dev/null; then
+  echo "Skills-hub manifest signature verification failed. Existing install left unchanged." >&2
   exit 1
 fi
 
@@ -105,7 +105,7 @@ if ! curl -fsSL "$ARCHIVE_URL" -o "$ARCHIVE_FILE"; then
 fi
 
 if ! "$PYTHON_BIN" "$VERIFY_SCRIPT" "$MANIFEST_FILE" "$ARCHIVE_PATH" "$ARCHIVE_FILE"; then
-  echo "Myskillium archive verification failed. Existing install left unchanged." >&2
+  echo "Skills-hub archive verification failed. Existing install left unchanged." >&2
   exit 1
 fi
 
@@ -150,5 +150,5 @@ done < "$CLEANUP_SET"
 tar -xzf "$ARCHIVE_FILE" -C "$DEST"
 cp "$NEW_MARKER" "$MARKER"
 
-echo "Installed verified Myskillium full skills to $DEST from $ARCHIVE_URL"
+echo "Installed verified Skills-hub full skills to $DEST from $ARCHIVE_URL"
 echo "Manifest signature and archive hash were verified before extraction."

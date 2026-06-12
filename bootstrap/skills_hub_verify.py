@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify Myskillium signed-manifest artifact entries."""
+"""Verify Skills-hub signed-manifest artifact entries."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 def fail(message: str) -> None:
-    print(f"myskillium verification failed: {message}", file=sys.stderr)
+    print(f"skills-hub verification failed: {message}", file=sys.stderr)
     raise SystemExit(1)
 
 

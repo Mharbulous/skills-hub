@@ -29,7 +29,7 @@ Your agent name = your repository directory name (or use assigned name above).
 
 ## Quick Reference
 
-Materialize this skill folder from the full install or Myskillium per-skill
+Materialize this skill folder from the full install or Skills-hub per-skill
 tarball and set `SKILL_DIR` to that folder before running helper scripts.
 
 ### Check for Messages

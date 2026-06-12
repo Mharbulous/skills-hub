@@ -8,7 +8,7 @@ In Codex, invoke this skill with `$handover` (not `/handover`).
 
 ### Selector Script Path
 
-Materialize this skill folder from the full install or Myskillium per-skill
+Materialize this skill folder from the full install or Skills-hub per-skill
 tarball, set `SKILL_DIR` to that extracted folder, and run the deterministic
 selector from there:
 

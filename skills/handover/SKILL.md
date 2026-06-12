@@ -47,7 +47,7 @@ When `/handover` is invoked without arguments in an empty/minimal conversation:
    ```bash
    cd "$SKILL_DIR" && python scripts/handover_selector.py --claim [repo_path]
    ```
-   Materialize this skill folder from the full install or Myskillium per-skill
+   Materialize this skill folder from the full install or Skills-hub per-skill
    tarball, set `SKILL_DIR` to that extracted folder, and use the working
    directory from environment context as `[repo_path]`.
 

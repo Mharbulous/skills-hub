@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch, verify, and materialize one Myskillium skill into a local cache."""
+"""Fetch, verify, and materialize one Skills-hub skill into a local cache."""
 
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 
-BASE_URL = "https://myskillium.web.app/hub"
-NAMESPACE = "myskillium-manifest"
-SIGNER_IDENTITY = "myskillium-manifest"
+BASE_URL = "https://skills-hub.web.app/hub"
+NAMESPACE = "skills-hub-manifest"
+SIGNER_IDENTITY = "skills-hub-manifest"
 
 
 def fail(message: str) -> None:
-    print(f"myskillium-fetch: {message}", file=sys.stderr)
+    print(f"skills-hub-fetch: {message}", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -37,7 +37,7 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def fetch_bytes(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "myskillium-fetch/1"})
+    request = urllib.request.Request(url, headers={"User-Agent": "skills-hub-fetch/1"})
     with urllib.request.urlopen(request, timeout=30) as response:
         status = getattr(response, "status", 200) or 200
         if status != 200:
@@ -46,7 +46,7 @@ def fetch_bytes(url: str) -> bytes:
 
 
 def verify_signature(manifest_bytes: bytes, sig_bytes: bytes, allowed_signers: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="myskillium-signature-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="skills-hub-signature-") as temp_dir:
         temp = Path(temp_dir)
         manifest_path = temp / "manifest.json"
         sig_path = temp / "manifest.json.sig"
@@ -145,7 +145,7 @@ def find_offline_cache(cache_root: Path, harness: str, skill: str) -> Path | Non
     candidates = []
     for child in root.iterdir():
         skill_md = child / skill / "SKILL.md"
-        meta = child / "myskillium-cache.json"
+        meta = child / "skills-hub-cache.json"
         if skill_md.is_file() and meta.is_file() and cache_entry_is_fresh(meta):
             candidates.append(skill_md)
     return sorted(candidates)[-1] if candidates else None
@@ -175,7 +175,7 @@ def materialize(base_url: str, harness: str, skill: str, allowed_signers: Path, 
     verify_artifact_bytes(manifest, relpath, tarball_bytes)
     final_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="myskillium-skill-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="skills-hub-skill-") as temp_dir:
         temp = Path(temp_dir)
         tarball_path = temp / f"{skill}.tar.gz"
         extract_path = temp / "extract"
@@ -197,7 +197,7 @@ def materialize(base_url: str, harness: str, skill: str, allowed_signers: Path, 
         "max_age_seconds": manifest["max_age_seconds"],
         "verified_at": datetime.now(timezone.utc).isoformat(),
     }
-    (final_dir / "myskillium-cache.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    (final_dir / "skills-hub-cache.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return final_skill_md
 
 
@@ -206,8 +206,8 @@ def main() -> None:
     parser.add_argument("harness", choices=["claude", "codex", "cowork"])
     parser.add_argument("skill")
     parser.add_argument("--base-url", default=os.environ.get("SKILLS_BASE_URL", BASE_URL))
-    parser.add_argument("--allowed-signers", type=Path, default=Path(os.environ.get("MYSKILLIUM_ALLOWED_SIGNERS", Path(__file__).with_name("myskillium_allowed_signers"))))
-    parser.add_argument("--cache-dir", type=Path, default=Path(os.environ.get("MYSKILLIUM_CACHE_DIR", Path.home() / ".myskillium" / "cache")))
+    parser.add_argument("--allowed-signers", type=Path, default=Path(os.environ.get("SKILLS_HUB_ALLOWED_SIGNERS", Path(__file__).with_name("skills_hub_allowed_signers"))))
+    parser.add_argument("--cache-dir", type=Path, default=Path(os.environ.get("SKILLS_HUB_CACHE_DIR", Path.home() / ".skills-hub" / "cache")))
     args = parser.parse_args()
     skill_md = materialize(args.base_url, args.harness, args.skill, args.allowed_signers, args.cache_dir)
     print(skill_md)

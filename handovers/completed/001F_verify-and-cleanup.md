@@ -24,7 +24,7 @@ Final verification of the full skills-hub pipeline across all environments, then
 **Remaining:**
 - Verify all environments pull correctly (Claude sandbox, CLI local, Codex, Cowork)
 - Retire old skill locations: `~/.claude/skills/` and `~/.codex/skills/` old copies (after confirming skills-hub is working)
-- Archive legacy repos: `public-skills` and `Myskillium`
+- Archive legacy repos: `public-skills` and `Skills-hub`
 - Remove stale files from repo root: `skillshubHANDOVER.md` (if still present)
 - Optionally remove `skills/hello-world/` example skill (served its purpose)
 - Update `HANDOVER.md` to reflect final completed state

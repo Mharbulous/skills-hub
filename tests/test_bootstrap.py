@@ -34,7 +34,7 @@ def find_git_bash():
 def work_tmp():
     parent = Path(os.environ.get("SKILLS_HUB_TEST_TMP", ROOT / ".test-tmp"))
     parent.mkdir(parents=True, exist_ok=True)
-    path = Path(tempfile.mkdtemp(prefix="myskillium-bootstrap-", dir=parent))
+    path = Path(tempfile.mkdtemp(prefix="skills-hub-bootstrap-", dir=parent))
     try:
         yield path
     finally:
@@ -89,14 +89,14 @@ def make_signing_key(temp_root):
     key_path = temp_root / "signing_key"
     if not key_path.exists():
         subprocess.run(
-            ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "myskillium-test", "-f", str(key_path)],
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "skills-hub-test", "-f", str(key_path)],
             check=True,
             capture_output=True,
             text=True,
         )
     allowed_signers = temp_root / "allowed_signers"
     pub = (key_path.with_suffix(".pub")).read_text(encoding="utf-8").strip()
-    allowed_signers.write_text(f"myskillium-manifest {pub}\n", encoding="utf-8")
+    allowed_signers.write_text(f"skills-hub-manifest {pub}\n", encoding="utf-8")
     return key_path, allowed_signers
 
 
@@ -120,7 +120,7 @@ def write_manifest(base, key_path):
     if sig_path.exists():
         sig_path.unlink()
     subprocess.run(
-        ["ssh-keygen", "-Y", "sign", "-f", str(key_path), "-n", "myskillium-manifest", str(manifest_path)],
+        ["ssh-keygen", "-Y", "sign", "-f", str(key_path), "-n", "skills-hub-manifest", str(manifest_path)],
         check=True,
         capture_output=True,
         text=True,
@@ -156,7 +156,7 @@ def run_setup(script_name, harness, base, allowed_signers, dest, *args, check=Tr
             env.get("PATH", ""),
         ]
     )
-    env["MYSKILLIUM_ALLOWED_SIGNERS"] = bash_path(allowed_signers)
+    env["SKILLS_HUB_ALLOWED_SIGNERS"] = bash_path(allowed_signers)
     command = [str(bash), f"bootstrap/{script_name}", *args, bash_arg(dest)]
     return subprocess.run(
         command,
@@ -182,7 +182,7 @@ def test_fresh_stub_install_writes_marker_for_each_harness(work_tmp, script_name
     assert result.returncode == 0
     assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "full alpha\n"
     assert (dest / "alpha" / "scripts" / "tool.sh").read_text(encoding="utf-8") == "echo full\n"
-    assert (dest / ".myskillium-managed-skills").read_text(encoding="utf-8") == "alpha\n"
+    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
 
 
 def test_rerun_is_idempotent_and_preserves_user_skill(work_tmp):
@@ -196,7 +196,7 @@ def test_rerun_is_idempotent_and_preserves_user_skill(work_tmp):
 
     assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "full alpha\n"
     assert (dest / "local-only" / "SKILL.md").read_text(encoding="utf-8") == "local\n"
-    assert (dest / ".myskillium-managed-skills").read_text(encoding="utf-8") == "alpha\n"
+    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
 
 
 def test_pre_marker_full_install_is_replaced_by_stub(work_tmp):
@@ -225,7 +225,7 @@ def test_old_marker_entries_removed_when_upstream_removes_skill(work_tmp):
 
     assert not (dest / "alpha").exists()
     assert (dest / "beta" / "SKILL.md").read_text(encoding="utf-8") == "beta\n"
-    assert (dest / ".myskillium-managed-skills").read_text(encoding="utf-8") == "beta\n"
+    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "beta\n"
 
 
 def test_invalid_archive_leaves_prior_install_and_marker_untouched(work_tmp):
@@ -240,7 +240,7 @@ def test_invalid_archive_leaves_prior_install_and_marker_untouched(work_tmp):
 
     assert result.returncode != 0
     assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha\n"
-    assert (dest / ".myskillium-managed-skills").read_text(encoding="utf-8") == "alpha\n"
+    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
 
 
 def test_full_mode_installs_full_bundle_with_same_cleanup_semantics(work_tmp):
@@ -256,7 +256,7 @@ def test_full_mode_installs_full_bundle_with_same_cleanup_semantics(work_tmp):
 
     assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "full alpha\n"
     assert (dest / "alpha" / "scripts" / "tool.sh").read_text(encoding="utf-8") == "echo full\n"
-    assert (dest / ".myskillium-managed-skills").read_text(encoding="utf-8") == "alpha\n"
+    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
 
 
 def test_tampered_archive_hash_leaves_prior_install_and_marker_untouched(work_tmp):
@@ -269,7 +269,7 @@ def test_tampered_archive_hash_leaves_prior_install_and_marker_untouched(work_tm
 
     assert result.returncode != 0
     assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha\n"
-    assert (dest / ".myskillium-managed-skills").read_text(encoding="utf-8") == "alpha\n"
+    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
 
 
 def test_bad_manifest_signature_leaves_prior_install_and_marker_untouched(work_tmp):
@@ -284,4 +284,4 @@ def test_bad_manifest_signature_leaves_prior_install_and_marker_untouched(work_t
 
     assert result.returncode != 0
     assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha\n"
-    assert (dest / ".myskillium-managed-skills").read_text(encoding="utf-8") == "alpha\n"
+    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"

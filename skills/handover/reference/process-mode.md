@@ -9,7 +9,7 @@ Resume from latest incomplete handover. **Process ONE handover per session.**
 When `/handover` is invoked without arguments in an empty/minimal conversation:
 
 Set `SKILL_DIR` to the materialized handover skill folder from the full install
-or Myskillium per-skill tarball before running scripts.
+or Skills-hub per-skill tarball before running scripts.
 
 1. **Run deterministic selector immediately** (don't read this entire file first):
    ```bash
