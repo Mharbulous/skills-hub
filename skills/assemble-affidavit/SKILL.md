@@ -50,11 +50,11 @@ multiple candidates exist, ask the user to pick one.
 - **Affidavit MUST be `.docx` format** — required for header/jurat XML
   rewriting. If the affidavit is a PDF, abort and tell the user a DOCX
   version is needed.
-- **Exhibits MUST be `.pdf` format** — no exceptions. If an exhibit
-  exists only as XLSX, DOCX, or another format, abort and ask the user
-  to convert it to PDF first (e.g., File > Save As PDF / Export in
-  Excel or Word). If both a PDF and a non-PDF version of an exhibit
-  exist, use the PDF.
+- **Exhibits must be `.pdf` format.** If both a PDF and a non-PDF
+  version of an exhibit exist, use the PDF. If only a non-PDF version
+  exists, convert it to PDF using LibreOffice before proceeding (see
+  Non-PDF exhibit handling below). Do NOT pass unconverted files to
+  the assembly script.
 
 Infer as many parameters as possible from context:
 
@@ -116,6 +116,32 @@ user requests pagination, add sequential page numbers (footer, centered)
 to the finalized PDF using PyMuPDF. Skip this step until the user
 explicitly asks for it.
 
+## No ad-hoc assembly — Critical
+
+Assembly MUST use `scripts/assemble.py`. If the script cannot be located,
+read, or executed for any reason (resolver failure, FUSE error, missing
+dependencies, network timeout, truncated file, etc.), the skill MUST
+**fail loudly and stop**. Specifically:
+
+1. Report the exact error to the user (e.g., "assemble.py could not be
+   loaded: [reason]").
+2. Do NOT improvise a replacement script, inline assembly code, or any
+   ad-hoc alternative — not with reportlab, pypdf, PyMuPDF, or any other
+   library.
+3. Do NOT partially assemble (e.g., merge without stamps, stamp without
+   header rewrite).
+
+**Why:** Ad-hoc assembly bypasses the tested stamp placement, opacity,
+header/jurat rewrite, and FUSE-safety logic in `assemble.py`. Prior
+incidents have produced opaque white boxes that obscure exhibit content —
+a defect that could go unnoticed and be filed with the court. The risk of
+silent data damage outweighs the inconvenience of a failed run.
+
+**Recovery path:** Tell the user the skill's assembly script is
+unavailable and suggest: (a) retry in a new session, (b) verify the
+skill is installed correctly, or (c) run `assemble.py` manually from
+the command line.
+
 ## Idempotency — Critical
 
 This skill MUST be idempotent. It always works from original source files
@@ -136,6 +162,42 @@ If you find yourself modifying an exhibit file in its source location
 idempotency. All modifications happen on temp copies that are merged into
 the output PDF.
 
+## Date consistency
+
+After editing the header and jurat dates, scan the full affidavit body for
+all date references (regex: `(January|February|...|December)\s+\d{1,2},?\s+\d{4}`).
+If any body-text dates reference the affidavit's own date (e.g., "as of the
+date of this affidavit, June 22, 2026") and that date differs from the
+header/jurat date, flag the discrepancy to the user. Do NOT silently change
+body-text dates — they may involve interest calculations or other substantive
+content that requires the lawyer's judgment.
+
+## Non-PDF exhibit handling
+
+If exhibit files exist in non-PDF formats (`.xlsx`, `.docx`, `.png`, etc.):
+
+- If both a PDF and non-PDF version exist for the same exhibit letter,
+  use the PDF and ignore the other.
+- If only a non-PDF version exists, convert it to PDF using LibreOffice
+  (`soffice --headless --convert-to pdf`), then proceed. Tell the user
+  which files were converted so they can verify the output looks correct.
+- Flag `.xlsx` files specifically — they are common for financial
+  spreadsheet exhibits and their PDF conversion should be confirmed by
+  the user before the assembled package is finalized.
+
+## Previously stamped file detection
+
+The exhibit folder may contain previously stamped versions of exhibits
+from prior assembly runs. Detect these by:
+
+- Filename patterns like `*-LLC-VAN-D22P.pdf` or `*_stamped.pdf`
+- Files whose first page contains exhibit stamp text ("This is Exhibit"
+  + "referred to in the Affidavit")
+
+When both stamped and unstamped versions exist, always use the unstamped
+(plain) version. Report detected stamped files in the validation summary
+so the user can clean up the folder.
+
 ## Error handling
 
 - If LibreOffice is not installed, install it: `apt-get install -y libreoffice-writer`
@@ -143,14 +205,18 @@ the output PDF.
 - If scipy is not installed: `pip install scipy --break-system-packages`
 - If an exhibit file is missing, report which letter/file is missing and
   ask the user to provide it
-- If the FUSE mount causes write failures, all writes go through `/var/tmp/`
-  first with `shutil.copy2()` to the final destination
+- If the FUSE mount causes write failures, use the `save_pdf()` helper in
+  `assemble.py` (writes via `tobytes()` + manual file write) instead of
+  `doc.save()`. For file copies, read into memory first then write, rather
+  than using `shutil.copy2()` across FUSE boundaries.
 
 ## FUSE mount — critical constraint
 
 The Cowork sandbox mounts the user's workspace via a FUSE chain (virtiofs
 + bindfs). This FUSE layer caches file lookups aggressively — after a
 rename, reads from the new path may return the old file's content.
+
+### File rename/copy operations
 
 **Rule: never use bash `mv`, `cp`, or `shutil` directly for exhibit file
 operations.** Use the `scripts/rename_exhibits.py` script instead. It
@@ -159,6 +225,23 @@ handles FUSE cache invalidation deterministically via rename round-trips.
 LLM inference cannot reliably remember this constraint across tool calls.
 The script exists specifically to prevent this class of error. See
 `references/validation.md` section 2f for usage details.
+
+### PyMuPDF save operations
+
+PyMuPDF's `doc.save(path)` internally removes and replaces the target
+file, which fails on FUSE mounts with `PermissionError: Operation not
+permitted`. The `assemble.py` script uses `save_pdf(doc, path)` which
+calls `doc.tobytes()` + `open(path, 'wb').write(bytes)` instead.
+
+Similarly, `shutil.copy2()` across FUSE boundaries can fail with
+`PermissionError`. The script reads source files into memory with
+`open(path, 'rb').read()` then writes to the destination, bypassing
+the FUSE copy path.
+
+**If you add new file operations to assemble.py, always use:**
+- `save_pdf(doc, path)` instead of `doc.save(path)`
+- `copy_to_tmp(src)` instead of `shutil.copy2(src, dst)`
+- Read-into-memory + write instead of `shutil.copy2()` for final output
 
 ### Pre-flight: script integrity
 

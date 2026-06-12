@@ -111,8 +111,13 @@ STAMP_FONT_PATH = "/usr/share/fonts/truetype/crosextra/Carlito-Regular.ttf"
 HEADER_FONT_PATH = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
 HEADER_FONT_SIZE = 12.0
 
-# Stamp text opacity
-STAMP_OPACITY = 0.6
+# Stamp text opacity (0.0 = invisible, 1.0 = fully opaque)
+# 0.5 = 50% opaque / 50% transparent — readable but unobtrusive
+STAMP_TEXT_OPACITY = 0.5
+
+# Stamp background and border: fully transparent (text only, no box)
+STAMP_BG_OPACITY = 0.0
+STAMP_BORDER_OPACITY = 0.0
 
 # Stamp margin from page edge (pt)
 STAMP_MARGIN = 18.0
@@ -120,17 +125,6 @@ STAMP_MARGIN = 18.0
 # Whitespace stamp placement: grid resolution and content clearance
 GRID_CELL = 4.0       # pt — occupancy grid cell size
 CONTENT_CLEARANCE = 6.0  # pt — padding around occupied rects
-
-# Static stamp lines: (sx, sy0, text_or_None)
-# sy0 is y-offset in stamp-space before adding STAMP_ASCENT
-STAMP_LINES = [
-    (0.8,   1.1,  None),   # dynamic: exhibit letter
-    (0.8,  14.3,  "affidavit of ____________________ "),
-    (0.8,  27.5,  None),   # dynamic: sworn before me on date
-    (4.2,  53.9,  "_____________________________ "),
-    (1.8,  67.1,  "A Commissioner for taking Affidavits "),
-    (4.7,  80.3,  "for the Province of British Columbia"),
-]
 
 
 # ---------------------------------------------------------------------------
@@ -183,14 +177,35 @@ def parse_date(dt_str: str) -> tuple:
 
 
 def copy_to_tmp(src: str, suffix: str = None) -> str:
-    """Copy a file to the per-run temp dir for FUSE-safe processing."""
+    """Copy a file to the per-run temp dir for FUSE-safe processing.
+
+    Reads the source file into memory first to bypass FUSE read caching,
+    then writes to the temp dir. This avoids PermissionError and stale
+    content issues that occur with shutil.copy2 across FUSE boundaries.
+    """
     src_path = Path(src)
     if suffix:
         dst = Path(get_run_tmpdir()) / f"assemble_{src_path.stem}{suffix}"
     else:
         dst = Path(get_run_tmpdir()) / f"assemble_{src_path.name}"
-    shutil.copy2(str(src_path), str(dst))
+    # Read into memory to bypass FUSE cache, then write to temp dir
+    with open(str(src_path), 'rb') as f:
+        data = f.read()
+    with open(str(dst), 'wb') as f:
+        f.write(data)
     return str(dst)
+
+
+def save_pdf(doc, path: str) -> None:
+    """Save a PyMuPDF document to path using tobytes() + manual write.
+
+    PyMuPDF's doc.save() internally removes and replaces the target file,
+    which fails on FUSE mounts with PermissionError. Writing the bytes
+    manually avoids this.
+    """
+    pdf_bytes = doc.tobytes(garbage=4, deflate=True)
+    with open(path, 'wb') as f:
+        f.write(pdf_bytes)
 
 
 
@@ -235,10 +250,17 @@ import math
 def _get_occupied_rects(page) -> list:
     """Collect padded bounding rects for all content on the page.
     Uses per-line granularity for text (blocks merge nearby lines into
-    one giant rect, hiding gaps) and block-level for images."""
+    one giant rect, hiding gaps) and block-level for images.
+
+    For scanned PDFs (image-only, no text layer), falls back to
+    pixmap-based detection: renders the page at low DPI and scans
+    for non-white regions to build occupied rects.
+    """
     rects = []
+    has_content = False
     flags = fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_IMAGES
     for block in page.get_text("dict", flags=flags)["blocks"]:
+        has_content = True
         if block["type"] == 1:
             # Image block — use the whole bbox
             r = fitz.Rect(block["bbox"])
@@ -256,6 +278,7 @@ def _get_occupied_rects(page) -> list:
                 ))
     try:
         for d in page.get_drawings():
+            has_content = True
             r = fitz.Rect(d["rect"])
             rects.append(fitz.Rect(
                 r.x0 - CONTENT_CLEARANCE, r.y0 - CONTENT_CLEARANCE,
@@ -263,6 +286,63 @@ def _get_occupied_rects(page) -> list:
             ))
     except Exception:
         pass  # best-effort for vector drawings
+
+    # Fallback for scanned PDFs: if no text/drawing content was found,
+    # render the page to a low-res pixmap and scan for non-white regions.
+    if not rects and not has_content:
+        rects = _get_occupied_rects_from_pixmap(page)
+
+    return rects
+
+
+def _get_occupied_rects_from_pixmap(page) -> list:
+    """Render page at low DPI and detect non-white regions.
+
+    Divides the rendered image into a grid of cells and marks cells
+    as occupied if their average pixel value is below a threshold
+    (i.e., not white). Returns occupied rects in page coordinates.
+    """
+    # Render at 36 DPI (low res, fast) — enough to detect content regions
+    RENDER_DPI = 36
+    scale = RENDER_DPI / 72.0
+    pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale))
+
+    pw, ph = page.rect.width, page.rect.height
+    img_w, img_h = pix.width, pix.height
+
+    # Cell size in image pixels (corresponds to ~GRID_CELL*4 in page space)
+    CELL_PX = max(4, int(16 * scale))
+    WHITE_THRESHOLD = 240  # pixel value below this = "has content"
+
+    rects = []
+    samples = pix.samples  # raw pixel bytes
+    n_channels = pix.n  # number of channels (3 for RGB, 4 for RGBA)
+
+    for row_start in range(0, img_h, CELL_PX):
+        for col_start in range(0, img_w, CELL_PX):
+            row_end = min(row_start + CELL_PX, img_h)
+            col_end = min(col_start + CELL_PX, img_w)
+
+            # Sample center pixel of the cell
+            cy = (row_start + row_end) // 2
+            cx = (col_start + col_end) // 2
+            idx = (cy * img_w + cx) * n_channels
+            if idx + 2 < len(samples):
+                r_val = samples[idx]
+                g_val = samples[idx + 1]
+                b_val = samples[idx + 2]
+                avg = (r_val + g_val + b_val) / 3.0
+                if avg < WHITE_THRESHOLD:
+                    # Convert image coords back to page coords
+                    px0 = col_start / scale
+                    py0 = row_start / scale
+                    px1 = col_end / scale
+                    py1 = row_end / scale
+                    rects.append(fitz.Rect(
+                        px0 - CONTENT_CLEARANCE, py0 - CONTENT_CLEARANCE,
+                        px1 + CONTENT_CLEARANCE, py1 + CONTENT_CLEARANCE,
+                    ))
+
     return rects
 
 
@@ -346,33 +426,36 @@ def find_best_stamp_position(page) -> tuple:
     return "whitespace", fitz.Rect(x0, y0, x0 + STAMP_W, y0 + STAMP_H)
 
 
-def draw_stamp(page, rect: fitz.Rect, letter: str, signing_date: str,
+def draw_stamp(page, rect: fitz.Rect, letter: str, affiant_name: str,
                stamp_font) -> None:
     """
     Draw the BC commissioner exhibit stamp on the page at the given rect.
+
+    Format (text only — no background box or border):
+        This is Exhibit "A" referred to in the
+        Affidavit of {affiant_name} made
+        this ____ day of _____________, 20____
+
+        _________________________
+        Commissioner for affidavit
     """
-    year, month_num, day = parse_date(signing_date)
-    mn = month_name(signing_date)
-    mmm = mn[:3]
-
-    # Dynamic lines
-    line1_text = f'This is Exhibit " {letter} " referred to in the'
-    line3_text = f"sworn before me on {day:02d}/{mmm}/{year}"
-
     ox, oy = rect.x0, rect.y0  # origin of stamp rect
+    line_height = STAMP_FS * 1.25  # 25% leading
 
-    for sx, sy0, static_text in STAMP_LINES:
-        if static_text is None:
-            # Dynamic line
-            if sy0 == 1.1:
-                text = line1_text
-            else:
-                text = line3_text
-        else:
-            text = static_text
+    lines = [
+        f'This is Exhibit “{letter}” referred to in the',
+        f"Affidavit of {affiant_name} made",
+        "this ____ day of _____________, 20____",
+        "",  # blank line before signature
+        "_________________________",
+        "Commissioner for affidavit",
+    ]
 
-        x = ox + sx * SCALE
-        y = oy + (sy0 + STAMP_ASCENT) * SCALE
+    for i, text in enumerate(lines):
+        if not text:
+            continue
+        x = ox + 1.0 * SCALE
+        y = oy + (i * line_height) + STAMP_ASCENT * SCALE
 
         page.insert_text(
             fitz.Point(x, y),
@@ -381,8 +464,8 @@ def draw_stamp(page, rect: fitz.Rect, letter: str, signing_date: str,
             fontsize=STAMP_FS,
             fontname="Carlito",
             fill=(0, 0, 0),
-            fill_opacity=STAMP_OPACITY,
-            stroke_opacity=STAMP_OPACITY,
+            fill_opacity=STAMP_TEXT_OPACITY,
+            stroke_opacity=STAMP_TEXT_OPACITY,
         )
 
 
@@ -457,11 +540,19 @@ def rewrite_jurat(page, bbox: list, jurat_verb: str,
     words = page.get_text("words")
 
     # --- Locate the AFFIRMED/SWORN line ---
+    # Find "AFFIRMED BEFORE ME" or "SWORN BEFORE ME" as a phrase, not just
+    # the word in isolation. The old w[1] > 200 threshold was arbitrary and
+    # broke on affidavits where the jurat started higher on the page.
     affirmed_word = None
     for w in words:
-        if w[4].upper() in ("AFFIRMED", "SWORN") and w[1] > 200:
-            affirmed_word = w
-            break
+        if w[4].upper() in ("AFFIRMED", "SWORN"):
+            # Verify this is part of "BEFORE ME" (the jurat), not
+            # "AFFIRM THAT" (the oath in the body)
+            nearby = [w2 for w2 in words
+                      if abs(w2[1] - w[1]) < 5 and w2[4].upper() == "BEFORE"]
+            if nearby:
+                affirmed_word = w
+                break
 
     if affirmed_word is None:
         raise RuntimeError(
@@ -617,7 +708,7 @@ def main():
 
         # --- Phase 4: Save processed affidavit ---
         aff_tmp = os.path.join(get_run_tmpdir(), "aff_processed.pdf")
-        aff_doc.save(aff_tmp, garbage=4, deflate=True)
+        save_pdf(aff_doc, aff_tmp)
         aff_page_count = len(aff_doc)
         aff_doc.close()
 
@@ -670,9 +761,9 @@ def main():
 
             if position is not None:
                 # Stamp directly on the exhibit's first page
-                draw_stamp(first_page, stamp_rect, letter, signing_date, None)
+                draw_stamp(first_page, stamp_rect, letter, affiant_name, None)
                 stamped_path = os.path.join(get_run_tmpdir(), f"ex_{letter}_stamped.pdf")
-                ex_doc.save(stamped_path, garbage=4, deflate=True)
+                save_pdf(ex_doc, stamped_path)
                 ex_doc.close()
                 gc.collect()
                 parts.append(stamped_path)
@@ -691,13 +782,13 @@ def main():
                 cx = (612 - STAMP_W) / 2
                 cy = (792 - STAMP_H) / 2
                 centered_rect = fitz.Rect(cx, cy, cx + STAMP_W, cy + STAMP_H)
-                draw_stamp(blank_page, centered_rect, letter, signing_date, None)
+                draw_stamp(blank_page, centered_rect, letter, affiant_name, None)
                 blank_path = os.path.join(get_run_tmpdir(), f"ex_{letter}_blank.pdf")
-                blank_doc.save(blank_path)
+                save_pdf(blank_doc, blank_path)
                 blank_doc.close()
 
                 stamped_path = os.path.join(get_run_tmpdir(), f"ex_{letter}_stamped.pdf")
-                ex_doc.save(stamped_path, garbage=4, deflate=True)
+                save_pdf(ex_doc, stamped_path)
                 ex_doc.close()
                 gc.collect()
 
@@ -723,20 +814,27 @@ def main():
             sys.exit(1)
 
         # --- Phase 7: Copy to final output path ---
+        # Use read-into-memory + write pattern to bypass FUSE copy issues
         final_path = output_path
         try:
             os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
-            shutil.copy2(tmp_output, output_path)
+            with open(tmp_output, 'rb') as f:
+                data = f.read()
+            with open(output_path, 'wb') as f:
+                f.write(data)
         except (PermissionError, OSError):
             from datetime import datetime
             base, ext = os.path.splitext(output_path)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             versioned = f"{base}_{ts}{ext}"
             try:
-                shutil.copy2(tmp_output, versioned)
+                with open(tmp_output, 'rb') as f:
+                    data = f.read()
+                with open(versioned, 'wb') as f:
+                    f.write(data)
                 final_path = versioned
             except Exception:
-                rescue = os.path.join("/var/tmp", f"assembled_rescue_{os.getpid()}.pdf")
+                rescue = os.path.join(get_run_tmpdir(), f"assembled_rescue_{os.getpid()}.pdf")
                 shutil.move(tmp_output, rescue)
                 final_path = rescue
 

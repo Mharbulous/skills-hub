@@ -5,6 +5,36 @@ DOCX-to-PDF conversion, header/jurat coordinate discovery, script invocation,
 and output delivery. Only proceed here after validation (`references/validation.md`)
 has passed.
 
+## DOCX-only requirement — Critical
+
+The affidavit **must** be a DOCX file. Edit it directly (header, jurat,
+body text) using `python-docx` **before** converting to PDF. This avoids
+lossy PDF redaction, font mismatches, and fragile coordinate-based text
+replacement. The PDF conversion happens once, after all DOCX edits are
+complete.
+
+If no DOCX is available, **stop and tell the user** — do not fall back to
+PDF-based header/jurat rewriting. The risk of silent errors (wrong dates,
+missed rewrites) outweighs the convenience of a workaround.
+
+## Exhibit stamp format
+
+The exhibit stamp is **text only** — no background box, no visible border.
+Text is rendered at 40% opacity (semi-transparent). The stamp reads:
+
+```
+This is Exhibit "A" referred to in the
+Affidavit of {affiant_name} made
+this ____ day of _____________, 20____
+
+_________________________
+Commissioner for affidavit
+```
+
+For scanned exhibits (image-only PDFs with no text layer), the script uses
+pixmap-based whitespace detection to find stamp placement instead of
+relying on `get_text("blocks")` which returns nothing for scanned pages.
+
 ## Source files are read-only
 
 **Never modify the original exhibit files or affidavit DOCX.** All
