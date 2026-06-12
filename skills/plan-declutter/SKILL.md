@@ -63,7 +63,7 @@ For each subfolder, extract number prefix and name (e.g., `2. ADRs` → number=2
 
 1. Exact name match (case-insensitive)
 2. Plural strip: remove trailing 's' and recheck (ADRs → ADR)
-3. Synonym lookup: `~/.claude/skills/plan-declutter/references/synonyms.md` (read from skill directory)
+3. Synonym lookup: `references/synonyms.md` in the materialized skill directory
 4. Name-over-number: name matches canonical but number differs → use canonical number
 5. No match → ask user
 
@@ -100,7 +100,7 @@ For each subfolder, extract number prefix and name (e.g., `2. ADRs` → number=2
 - Existing table is dated in the past
 - `$ARGUMENTS` equals "table" (case-insensitive)
 
-**How**: Read `~/.claude/skills/plan-declutter/references/table-format.md`, spawn Haiku subagent:
+**How**: Read `references/table-format.md` from the materialized skill directory, spawn Haiku subagent:
 - `model`: "haiku"
 - `prompt`: content from `references/table-format.md` (inside the code fence)
 

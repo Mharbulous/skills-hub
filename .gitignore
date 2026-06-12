@@ -1,3 +1,6 @@
 dist/
 site/
+.firebase/
 __pycache__/
+.pytest_cache/
+.test-tmp/

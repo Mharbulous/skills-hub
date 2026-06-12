@@ -43,17 +43,18 @@ Final output must be exactly one of these JSON structures:
 
 ## Workflow
 
-1. **Run:** `bash ~/.claude/skills/commit/scripts/gather-context.sh`
+1. **Materialize this skill folder** from the full install or Myskillium per-skill tarball, then treat that extracted folder as `SKILL_DIR`.
+2. **Run:** `bash "$SKILL_DIR/scripts/gather-context.sh"`
    - JSON includes `prev_commit_message`, `prev_commit_diff_stat`, `prev_commit_pushed`
-2. **Review previous commit** — skip if `prev_commit_pushed` is true OR `prev_commit_message` is empty.
+3. **Review previous commit** — skip if `prev_commit_pushed` is true OR `prev_commit_message` is empty.
    Otherwise check for:
    - **Accuracy:** Does `prev_commit_message` match `prev_commit_diff_stat`? Flag: wrong type (e.g. "fix" but files were added), wrong scope (e.g. "lesson3" but 9 files changed), missing info, misleading description.
    - **Co-authorship:** Does `prev_commit_message` contain a Co-Authored-By line for Claude/Anthropic?
    - If either issue → draft corrected message and run `git commit --amend -m "<corrected message>"`. Do this silently — no user approval needed.
-3. If `has_changes` is false → return `{"status":"error","reason":"Nothing to commit"}`
-4. Draft commit message using `diff_stat`, `sample_diffs`, and `recent_commits` from the JSON
-5. **Run:** `bash ~/.claude/skills/commit/scripts/sanitize-commit.sh --message "<message>" --files "all"`
-6. Return the script's JSON output directly
+4. If `has_changes` is false → return `{"status":"error","reason":"Nothing to commit"}`
+5. Draft commit message using `diff_stat`, `sample_diffs`, and `recent_commits` from the JSON
+6. **Run:** `bash "$SKILL_DIR/scripts/sanitize-commit.sh" --message "<message>" --files "all"`
+7. Return the script's JSON output directly
 
 ## Safety Rules
 

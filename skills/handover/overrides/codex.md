@@ -8,10 +8,12 @@ In Codex, invoke this skill with `$handover` (not `/handover`).
 
 ### Selector Script Path
 
-Run the deterministic selector with the Codex skill path:
+Materialize this skill folder from the full install or Myskillium per-skill
+tarball, set `SKILL_DIR` to that extracted folder, and run the deterministic
+selector from there:
 
 ```bash
-python C:\Users\Brahm\.codex\skills\handover\scripts\handover_selector.py --claim [repo_path]
+python "$SKILL_DIR/scripts/handover_selector.py" --claim [repo_path]
 ```
 
 ### Status Codes

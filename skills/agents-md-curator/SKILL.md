@@ -21,8 +21,11 @@ Discovery is automatic via `scripts/discover_managed_files.py` — no registrati
 
 ## Storage
 
+Materialize this skill folder from the full install or Myskillium per-skill
+tarball before running bundled scripts or reading bundled support files.
+
 ```
-~/.claude/skills/agents-md-curator/
+<materialized-skill-dir>/
   SKILL.md                        # this skill
   claude-storage.db               # SQLite database
   schema.sql

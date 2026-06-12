@@ -8,9 +8,12 @@ Resume from latest incomplete handover. **Process ONE handover per session.**
 
 When `/handover` is invoked without arguments in an empty/minimal conversation:
 
+Set `SKILL_DIR` to the materialized handover skill folder from the full install
+or Myskillium per-skill tarball before running scripts.
+
 1. **Run deterministic selector immediately** (don't read this entire file first):
    ```bash
-   cd ~/.claude/skills/handover && python scripts/handover_selector.py --claim [repo_path]
+   cd "$SKILL_DIR" && python scripts/handover_selector.py --claim [repo_path]
    ```
 
 2. **Handle JSON response** based on `status` field (see Deterministic Selection section below)
@@ -67,7 +70,7 @@ Files in `.handovers/WIP/` are being actively worked on by another session. **As
 Before manually checking files, invoke the deterministic selector with `--claim`:
 
 ```bash
-cd ~/.claude/skills/handover && python scripts/handover_selector.py --claim [repo_path]
+cd "$SKILL_DIR" && python scripts/handover_selector.py --claim [repo_path]
 ```
 
 The `--claim` flag atomically moves the selected file to WIP/ during selection, eliminating the LLM round-trip between selection and claim.
@@ -136,7 +139,7 @@ What would you like to do?
 **Re-running with exclude:**
 
 ```bash
-cd ~/.claude/skills/handover && python scripts/handover_selector.py --claim --exclude=170F_user-invitation.md [repo_path]
+cd "$SKILL_DIR" && python scripts/handover_selector.py --claim --exclude=170F_user-invitation.md [repo_path]
 ```
 
 ### Manual Workflow (Fallback)

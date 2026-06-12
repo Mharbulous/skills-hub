@@ -36,7 +36,9 @@ Compress an LLM-interpreted document while preserving behavior. The original is 
 
 ## State Files
 
-All iteration state lives in `C:/Users/Brahm/.claude/skills/articulate/work/`:
+Materialize this skill folder from the full install or Myskillium per-skill
+tarball before using bundled work files. All iteration state for the current
+run lives in `work/` inside that materialized skill directory:
 
 ```
 work/

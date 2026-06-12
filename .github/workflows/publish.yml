@@ -9,8 +9,8 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      # Deploy only once all three secrets are configured; otherwise just build.
-      DEPLOY_READY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && secrets.FIREBASE_PROJECT_ID != '' && secrets.PUBLISH_PATH_TOKEN != '' }}
+      # Deploy only once Firebase and signing secrets are configured; otherwise just build.
+      DEPLOY_READY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && secrets.FIREBASE_PROJECT_ID != '' && secrets.PUBLISH_PATH_TOKEN != '' && secrets.MYSKILLIUM_SIGNING_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +22,13 @@ jobs:
 
       - name: Build skill bundles
         run: python3 build/build.py
+
+      - name: Sign manifest
+        if: env.DEPLOY_READY == 'true'
+        run: |
+          printf '%s\n' "${{ secrets.MYSKILLIUM_SIGNING_KEY }}" > "$RUNNER_TEMP/myskillium_signing_key"
+          chmod 600 "$RUNNER_TEMP/myskillium_signing_key"
+          ssh-keygen -Y sign -f "$RUNNER_TEMP/myskillium_signing_key" -n myskillium-manifest dist/manifest.json
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -46,4 +53,4 @@ jobs:
 
       - name: Note skipped deploy
         if: env.DEPLOY_READY != 'true'
-        run: echo "Firebase secrets not configured yet — built dist/ only (see README one-time setup)."
+        run: echo "Firebase/signing secrets not configured yet; built unsigned dist/ only (see README one-time setup)."

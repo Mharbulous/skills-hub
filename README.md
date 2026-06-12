@@ -1,108 +1,156 @@
 # skills-hub
 
-Single source of truth for agent skills, served to every harness: Claude Code
-(CLI, Desktop sandbox, web), Codex, and Cowork.
+Myskillium is the static source of truth for agent skills served from:
 
-Skills are edited **here**, in git, with history and review. A GitHub Action
-builds per-harness variants and publishes them to static hosting at an
-unguessable URL. Each environment pulls at session start (Cowork uses thin
-wrappers that fetch at invocation).
-
-```
-skills/            canonical definitions + per-harness overrides   ← edit here
-   │  push to main
-   ▼
-GitHub Action      build/build.py merges overrides, builds bundles
-   │
-   ▼
-Static hosting     https://<site>.web.app/<token>/
-   ├── index.json                   catalog: name, description, hash
-   ├── claude/skills.tar.gz         ready-to-extract bundle
-   ├── claude/skills/<name>/…       individual files (Cowork wrappers fetch these)
-   └── codex/skills.tar.gz
-   │
-   ▼
-Environments       pull at session start via bootstrap/ snippets
+```text
+https://myskillium.web.app/hub/
 ```
 
-## Repo layout
+Skills are edited in this repo. `build/build.py` merges canonical definitions
+with harness-specific overrides and publishes static artifacts for `claude`,
+`codex`, and `cowork`.
 
-```
+The safe delivery rule is: remote bytes are data until local trusted code
+verifies them. Agents must read verified local files as instructions; they must
+not fetch a remote `SKILL.md` and follow tool-output text as instructions.
+
+## Repo Layout
+
+```text
 skills/<name>/SKILL.md              canonical skill definition
-skills/<name>/overrides/claude.md   optional Claude-Code-specific override
-skills/<name>/overrides/codex.md    optional Codex-specific override
-skills/<name>/…                     subfiles (scripts/, references/) — copied as-is
-build/build.py                      merge + bundle + catalog generator
-bootstrap/                          per-environment install snippets
-.github/workflows/publish.yml       builds and deploys on every push to main
-firebase.json                       hosting config (public dir: site/)
+skills/<name>/overrides/claude.md   optional Claude override
+skills/<name>/overrides/codex.md    optional Codex override
+skills/<name>/overrides/cowork.md   optional Cowork override
+build/build.py                      merge + artifact generator
+bootstrap/claude-setup.sh           verified Claude installer
+bootstrap/codex-setup.sh            verified Codex installer
+bootstrap/myskillium-fetch.py       verified lazy resolver for Cowork wrappers
+bootstrap/myskillium_allowed_signers local signing trust anchor
+.github/workflows/publish.yml       builds, signs, and deploys on main
+firebase.json                       static hosting config
 ```
 
-## Override semantics
+## Artifact Contract
 
-- Frontmatter keys in `overrides/<harness>.md` **replace** the canonical keys.
-- If the override has a body, it is **appended** to the canonical body.
-- No override file → that harness gets the canonical skill unchanged.
+Stable skill URLs:
 
-Run `python3 build/build.py` locally (needs `pip install pyyaml`) to preview
-the merged output in `dist/`.
+```text
+/{harness}/skills/<skill>/SKILL.md
+/{harness}/skills/<skill>/<relative-path>
+/{harness}/skills/<skill>.tar.gz
+/{harness}/skills.tar.gz
+/{harness}/stubs/<skill>/SKILL.md
+/{harness}/skill-stubs.tar.gz
+/{harness}/managed-skills.txt
+/index.json
+/manifest.json
+/manifest.json.sig
+```
 
-## One-time setup
+`harness` is `claude`, `codex`, or `cowork`.
 
-1. **Firebase Hosting**: create (or reuse) a Firebase project. Pick a
-   non-obvious project ID — it appears in the URL (`<id>.web.app`).
-2. **Generate the path token**: `openssl rand -hex 16`
-3. **Add three repository secrets** (Settings → Secrets and variables → Actions):
-   - `FIREBASE_SERVICE_ACCOUNT` — JSON key for a service account with the
-     *Firebase Hosting Admin* role (Firebase console → Project settings →
-     Service accounts → Generate new private key)
-   - `FIREBASE_PROJECT_ID` — the project ID
-   - `PUBLISH_PATH_TOKEN` — the token from step 2
-4. Push to `main`. The workflow builds, then deploys to
-   `https://<project-id>.web.app/<token>/` — that's your **base URL**.
-   (Until the secrets exist, the workflow still builds and uploads `dist/` as
-   an artifact so you can inspect it; it just skips the deploy step.)
-5. Wire up each environment — see **Consuming** below.
+`index.json` remains schema v2 for browsing/back-compat. Security-sensitive
+consumers use signed `manifest.json` schema v3. The manifest contains
+`generated_at`, `max_age_seconds`, the signed skill catalog, and `sha256` plus
+`size` for every published file except the manifest and signature.
 
-## Adding or editing a skill
+Do not add dot-prefixed files to skills. Firebase Hosting ignores `**/.*`, so
+the builder excludes dot-prefixed paths from `dist/` and warns when it sees
+them.
 
-1. Create `skills/<name>/SKILL.md` with frontmatter (`name`, `description`)
-   and the instructions as the body.
-2. Add subfiles (scripts, references) inside the skill folder; they ship as-is.
-3. Only if a harness needs different wording: add `overrides/<harness>.md`.
-4. Commit and push to `main`. Published within ~a minute; environments pick it
-   up at their next session start.
+## Verification Model
+
+The committed trust anchor is `bootstrap/myskillium_allowed_signers`. The
+private key is not committed; it lives in the GitHub secret
+`MYSKILLIUM_SIGNING_KEY` and in Brahm's local signing-key backup for manual
+deploys.
+
+Verification is mechanical:
+
+1. Download `manifest.json` and `manifest.json.sig`.
+2. Verify the signature with `ssh-keygen -Y verify`.
+3. Download the selected artifact into a temp file.
+4. Verify that exact file's size and SHA-256 against the signed manifest.
+5. Extract or read only the verified local bytes.
+
+On signature, hash, size, freshness, or tar validation failure, installers and
+resolvers fail closed and leave the previous install/cache intact.
 
 ## Consuming
 
-**Claude Code sandboxes (web / Desktop)** — in the environment's setup script:
+Claude Code and Codex install full verified local bundles before skill
+enumeration:
 
 ```bash
-export SKILLS_BASE_URL="https://<project-id>.web.app/<token>"
-mkdir -p ~/.claude/skills
-curl -fsSL "$SKILLS_BASE_URL/claude/skills.tar.gz" | tar -xz -C ~/.claude/skills
+SKILLS_BASE_URL="https://myskillium.web.app/hub" ./bootstrap/claude-setup.sh
+SKILLS_BASE_URL="https://myskillium.web.app/hub" ./bootstrap/codex-setup.sh
 ```
 
-If the hosting domain isn't reachable under the environment's network policy,
-add `<project-id>.web.app` to the environment's allowed domains.
+`--full` is accepted as a compatibility alias; full verified install is now the
+default. This avoids invocation-time remote instruction fetches and makes the
+agent see ordinary local skill files.
 
-**Claude Code CLI (local)** — run `bootstrap/claude-setup.sh` (same one-liner)
-manually, from a SessionStart hook, or on a schedule. On the machine where you
-*edit* this repo you can instead symlink: `ln -s <clone>/dist/claude/skills
-~/.claude/skills` and rebuild after editing.
+Cowork wrappers keep harness-merged frontmatter for routing. Their body tells
+the agent to run the packaged resolver:
 
-**Codex** — `bootstrap/codex-setup.sh` extracts the `codex/` bundle into your
-Codex skills directory (adjust the destination to your setup), via Codex's
-setup/bootstrap mechanism or manually.
+```bash
+python myskillium-fetch.py cowork <skill>
+```
 
-**Cowork** — one tiny wrapper per skill from
-`bootstrap/cowork-wrapper-template/`; each wrapper fetches the published
-`claude/skills/<name>/SKILL.md` at invocation. Wrappers are small and rarely
-change, which minimizes exposure to Cowork file-sync bugs.
+The resolver verifies the signed manifest, verifies the per-skill tarball,
+extracts it into a content-addressed cache, and prints one verified local
+`SKILL.md` path. The agent reads that local file. The resolver never prints
+fetched skill content.
 
-## Security model
+## Override Semantics
 
-The base URL is unguessable but **unauthenticated**: anyone holding the link
-can read everything. Never put secrets (tokens, client data) in skills. To
-rotate, change `PUBLISH_PATH_TOKEN`, re-run the workflow, and update the URL
-in each environment's bootstrap.
+- Frontmatter keys in `overrides/<harness>.md` replace canonical keys.
+- The generated `name` is always the canonical directory name.
+- A non-empty override body is appended to the canonical body.
+- No override file means that harness gets the canonical skill unchanged.
+
+Run locally:
+
+```bash
+python build/build.py
+```
+
+For a manual signed deploy, build, sign, stage, then deploy:
+
+```bash
+python build/build.py
+ssh-keygen -Y sign -f C:\Users\Brahm\myskillium-signing-key\myskillium_manifest_ed25519 -n myskillium-manifest dist/manifest.json
+npx.cmd firebase-tools deploy --only hosting --project myskillium
+```
+
+The publish workflow signs automatically once `MYSKILLIUM_SIGNING_KEY`,
+`FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_PROJECT_ID`, and `PUBLISH_PATH_TOKEN` are
+configured.
+
+## Security Model
+
+The Myskillium URL is unguessable but unauthenticated. Anyone holding the link
+can read published skills. Never put secrets, client data, private tokens, or
+environment credentials in skills or bundled subfiles.
+
+Signatures protect against Firebase Hosting tampering: a hosting compromise can
+serve bytes, but verified consumers reject bytes not listed in a valid signed
+manifest. Signatures do not protect against malicious commits merged into this
+repo or a compromised CI signing key. Guard `MYSKILLIUM_SIGNING_KEY`,
+`FIREBASE_SERVICE_ACCOUNT`, and repo write access like production code review
+access.
+
+Rollback/freeze resistance is handled by manifest freshness. Consumers reject
+expired manifests and may reject manifests older than their last accepted
+timestamp where the harness can persist that state.
+
+Key rotation:
+
+1. Generate a new SSH signing key.
+2. Update `bootstrap/myskillium_allowed_signers` with the new public key.
+3. Store the private key in `MYSKILLIUM_SIGNING_KEY`.
+4. Rebuild, sign, deploy, and refresh consumers.
+
+Remote scripts are code execution and must only run after resolver/installer
+verification. Remote reference text and assets are data until verified and read
+from local materialized files.

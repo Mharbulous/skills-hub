@@ -27,7 +27,7 @@ Present patterns via AskUserQuestion. **User MUST select** - do not auto-select.
 ### Phase 3: Name Proposal
 
 For each selected pattern:
-1. Check conflicts in `~/.claude/skills/` and `~/.claude/plugins/**/SKILL.md`
+1. Check conflicts among locally discoverable full-skill directories and `~/.claude/plugins/**/SKILL.md`
 2. Propose exactly 3 unique kebab-case names (verb-first preferred)
 3. Present via AskUserQuestion. **User MUST choose** - do not auto-select.
 

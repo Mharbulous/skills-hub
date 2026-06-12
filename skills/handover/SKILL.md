@@ -45,9 +45,11 @@ When `/handover` is invoked without arguments in an empty/minimal conversation:
 
 1. **BLOCKING REQUIREMENT: Run the deterministic selector with `--claim` as your FIRST action**
    ```bash
-   cd ~/.claude/skills/handover && python scripts/handover_selector.py --claim [repo_path]
+   cd "$SKILL_DIR" && python scripts/handover_selector.py --claim [repo_path]
    ```
-   Use the working directory from environment context as `[repo_path]`.
+   Materialize this skill folder from the full install or Myskillium per-skill
+   tarball, set `SKILL_DIR` to that extracted folder, and use the working
+   directory from environment context as `[repo_path]`.
 
    **FORBIDDEN SEQUENCE:**
    - ❌ Glob to see what's available

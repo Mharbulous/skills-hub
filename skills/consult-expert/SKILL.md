@@ -135,7 +135,8 @@ Examples:
 
 ### Create from Template
 
-Read the appropriate template from `~/.claude/skills/consult-expert/templates/`:
+Read the appropriate template from `templates/` in the materialized
+consult-expert skill folder:
 - Local → `local-expert-template.md`
 - Global → `global-expert-template.md`
 

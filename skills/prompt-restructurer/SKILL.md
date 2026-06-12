@@ -56,6 +56,9 @@ The write script uses Firestore `update()`, so unlisted fields are preserved aut
 
 ## Procedure
 
+Materialize this skill folder from the full install or Myskillium per-skill
+tarball and set `SKILL_DIR` to that folder before running helper scripts.
+
 ### Step 1 -- Pre-check (triage)
 
 Before reading or classifying, determine if the variant needs restructuring at all.
@@ -79,7 +82,7 @@ If none of the above apply, proceed to Step 2.
 
 Run from the `functions/` directory:
 ```bash
-node ~/.claude/skills/prompt-restructurer/scripts/firestore-prompt-ops.js read <stageId> <sessionId>
+node "$SKILL_DIR/scripts/firestore-prompt-ops.js" read <stageId> <sessionId>
 ```
 
 Record the `variantId` from the output -- you will need it for writing in Step 6.
@@ -161,7 +164,7 @@ Show the classification table for audit trail. Do NOT proceed to Step 6.
 
 Save the restructured data to a temp JSON file and write:
 ```bash
-node ~/.claude/skills/prompt-restructurer/scripts/firestore-prompt-ops.js write <stageId> <sessionId> <variantId> /tmp/restructured.json
+node "$SKILL_DIR/scripts/firestore-prompt-ops.js" write <stageId> <sessionId> <variantId> /tmp/restructured.json
 ```
 
 Use the `variantId` from Step 2. This may be `r1`, `r6`, or any revision -- not necessarily `v1`.
@@ -186,7 +189,7 @@ Read back and confirm:
 
 ## Inventory
 
-Run `node ~/.claude/skills/prompt-restructurer/scripts/firestore-prompt-ops.js list` for current inventory.
+Run `node "$SKILL_DIR/scripts/firestore-prompt-ops.js" list` for current inventory.
 
 ## Reference
 

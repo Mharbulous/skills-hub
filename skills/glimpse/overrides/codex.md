@@ -4,10 +4,12 @@ description: Capture screenshots of visible Windows desktop application windows 
 
 ## Codex Usage
 
-Use the bundled CLI (PowerShell):
+Materialize this skill folder from the full install or Myskillium per-skill
+tarball, set `SKILL_DIR` to that extracted folder, and use the bundled CLI
+(PowerShell):
 
 ```powershell
-python C:\Users\Brahm\.codex\skills\glimpse\scripts\glimpse.py capture "window title"
+python "$env:SKILL_DIR\src\glimpse.py" capture "window title"
 ```
 
 Desktop window access usually requires running the command outside the sandbox. When `windows` returns no windows, or capture cannot see a visible desktop app, rerun the command with escalated shell permissions.

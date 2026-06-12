@@ -29,12 +29,15 @@ Your agent name = your repository directory name (or use assigned name above).
 
 ## Quick Reference
 
+Materialize this skill folder from the full install or Myskillium per-skill
+tarball and set `SKILL_DIR` to that folder before running helper scripts.
+
 ### Check for Messages
 
 Read first 2-3 lines of `.ndjson` files in `threads/`:
 
 ```bash
-python "C:\Users\Brahm\.claude\skills\cross-agent-communication\scripts\check_messages.py"
+python "$SKILL_DIR/scripts/check_messages.py"
 ```
 
 Or manually read the thread file - line 1 is header, line 2 is newest message.
@@ -44,7 +47,7 @@ Or manually read the thread file - line 1 is header, line 2 is newest message.
 Insert new message as line 2 (after header). Use the helper script:
 
 ```bash
-python "C:\Users\Brahm\.claude\skills\cross-agent-communication\scripts\send_message.py" <thread-file> <to-agent> <subject> <body>
+python "$SKILL_DIR/scripts/send_message.py" <thread-file> <to-agent> <subject> <body>
 ```
 
 Or manually edit the NDJSON file.
@@ -98,13 +101,13 @@ Location: `C:\Users\Brahm\Git\.cross-agent\dropbox\`
 
 ```bash
 # List files (runs cleanup automatically)
-python "C:\Users\Brahm\.claude\skills\cross-agent-communication\scripts\dropbox.py" list
+python "$SKILL_DIR/scripts/dropbox.py" list
 
 # Deposit a file (adds date prefix automatically)
-python "C:\Users\Brahm\.claude\skills\cross-agent-communication\scripts\dropbox.py" deposit /path/to/file.txt
+python "$SKILL_DIR/scripts/dropbox.py" deposit /path/to/file.txt
 
 # Get full path to a file
-python "C:\Users\Brahm\.claude\skills\cross-agent-communication\scripts\dropbox.py" get filename.txt
+python "$SKILL_DIR/scripts/dropbox.py" get filename.txt
 ```
 
 Or manually copy files with proper naming: `2026-01-06-myfile.txt`

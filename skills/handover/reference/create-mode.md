@@ -236,11 +236,14 @@ Handovers describe **what** to do and **why**, never **how**. The executing agen
 
 Create the folder structure if it doesn't exist: `handovers/queued/`, `handovers/WIP/`, `handovers/completed/`
 
+Before running helper scripts, set `SKILL_DIR` to the materialized handover
+skill folder from the full install or Myskillium per-skill tarball.
+
 **Single handover:**
 
 1. Run script to determine next handover number:
    ```bash
-   python C:\Users\Brahm\.claude\skills\handover\scripts\get_next_handover_number.py {main_repo_path}
+   python "$SKILL_DIR/scripts/get_next_handover_number.py" {main_repo_path}
    ```
    The script scans ALL handover folders (`queued/`, `WIP/`, `completed/`) for highest numeric prefix (ignoring letters) and returns next number as zero-padded string (e.g., "039").
 2. Generate slug (lowercase, hyphens, max ~40 chars)

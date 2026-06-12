@@ -3,7 +3,7 @@ name: vision
 description: Creates vision & design philosophy doc through collaborative HITL dialogue.
 ---
 
-This skill outlines a process of a collaborative dialogue about a specific target (app, feature, plugin, skill, etc.) where your goal is to elicit and articulate the users high level design philosohpy and vision for that target.  The output will be a comprehensive vision document using this template: `~/.claude/skills/vision/reference/vision_template.md`
+This skill outlines a process of a collaborative dialogue about a specific target (app, feature, plugin, skill, etc.) where your goal is to elicit and articulate the users high level design philosohpy and vision for that target.  The output will be a comprehensive vision document using `reference/vision_template.md` from the materialized skill directory.
 
 You will not be ready to output the vision document until you understand and can paraphrase these key elements in your own words and that the user agrees with, and can write a concise vision statement in your owner words that the user agrees with completely.
 
