@@ -1,23 +1,14 @@
-import hashlib
-import io
 import json
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def require_tools():
-    if shutil.which("ssh-keygen") is None:
-        pytest.skip("missing ssh-keygen")
+RESOLVER = ROOT / "public" / "bootstrap" / "skills-hub-fetch.py"
 
 
 @pytest.fixture
@@ -31,90 +22,39 @@ def work_tmp():
         shutil.rmtree(path, ignore_errors=True)
 
 
-def write_archive(path, skill_name="alpha", skill_body="verified alpha\n"):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(path, "w:gz") as tar:
-        files = {
-            f"{skill_name}/SKILL.md": skill_body,
-            f"{skill_name}/reference/note.md": "reference\n",
-        }
-        for relpath, content in sorted(files.items()):
-            data = content.encode("utf-8")
-            info = tarfile.TarInfo(relpath)
-            info.size = len(data)
-            info.mtime = 0
-            info.uid = 0
-            info.gid = 0
-            info.uname = ""
-            info.gname = ""
-            tar.addfile(info, io.BytesIO(data))
+def make_skill_server(base_dir, skill_name, files=None):
+    """Create a static file tree mimicking the Firebase public/ layout."""
+    if files is None:
+        files = {"SKILL.md": f"# {skill_name}\nContent.\n", "ref/note.md": "reference\n"}
 
+    skill_dir = base_dir / "skills" / skill_name
+    for rel, content in files.items():
+        dest = skill_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(content, encoding="utf-8")
 
-def sha256(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def make_signing_key(temp_root):
-    require_tools()
-    key_path = temp_root / "signing_key"
-    subprocess.run(
-        ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "skills-hub-test", "-f", str(key_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    allowed_signers = temp_root / "allowed_signers"
-    pub = (key_path.with_suffix(".pub")).read_text(encoding="utf-8").strip()
-    allowed_signers.write_text(f"skills-hub-manifest {pub}\n", encoding="utf-8")
-    return key_path, allowed_signers
-
-
-def write_manifest(base, key_path, max_age_seconds=604800):
-    files = {}
-    for path in sorted(p for p in base.rglob("*") if p.is_file() and p.name not in {"manifest.json", "manifest.json.sig"}):
-        rel = path.relative_to(base).as_posix()
-        files[rel] = {"sha256": sha256(path), "size": path.stat().st_size}
-    manifest = {
-        "schema_version": 3,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "max_age_seconds": max_age_seconds,
-        "canonical_base_url": base.resolve().as_uri(),
-        "harnesses": ["cowork"],
-        "skills": [],
-        "files": files,
-    }
-    manifest_path = base / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    subprocess.run(
-        ["ssh-keygen", "-Y", "sign", "-f", str(key_path), "-n", "skills-hub-manifest", str(manifest_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-
-def make_base(temp_root):
-    base = temp_root / "base"
-    write_archive(base / "cowork" / "skills" / "alpha.tar.gz")
-    key_path, allowed_signers = make_signing_key(temp_root)
-    write_manifest(base, key_path)
-    return base, allowed_signers
-
-
-def run_fetch(base_url, allowed_signers, cache_dir, check=True):
-    return subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "bootstrap" / "skills-hub-fetch.py"),
-            "cowork",
-            "alpha",
-            "--base-url",
-            base_url,
-            "--allowed-signers",
-            str(allowed_signers),
-            "--cache-dir",
-            str(cache_dir),
+    file_list = list(files.keys())
+    index = {
+        "schema_version": 1,
+        "base_url": base_dir.resolve().as_uri(),
+        "skills": [
+            {
+                "name": skill_name,
+                "description": "test skill",
+                "harnesses": {
+                    h: {"base": f"skills/{skill_name}", "files": file_list}
+                    for h in ["claude", "codex", "cowork"]
+                },
+            }
         ],
+    }
+    (base_dir / "index.json").write_bytes(json.dumps(index).encode("utf-8"))
+    return base_dir
+
+
+def run_fetch(base_url, cache_dir, harness, skill, check=True):
+    return subprocess.run(
+        [sys.executable, str(RESOLVER), harness, skill, "--base-url", base_url, "--cache-dir", str(cache_dir)],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -123,51 +63,55 @@ def run_fetch(base_url, allowed_signers, cache_dir, check=True):
     )
 
 
-def test_resolver_materializes_verified_skill(work_tmp):
-    base, allowed_signers = make_base(work_tmp)
+def test_resolver_downloads_skill_files(work_tmp):
+    base = make_skill_server(work_tmp / "base", "alpha")
     cache = work_tmp / "cache"
 
-    result = run_fetch(base.resolve().as_uri(), allowed_signers, cache)
+    result = run_fetch(base.resolve().as_uri(), cache, "cowork", "alpha")
     skill_md = Path(result.stdout.strip())
 
     assert skill_md.is_file()
-    assert skill_md.read_text(encoding="utf-8") == "verified alpha\n"
-    assert (skill_md.parent / "reference" / "note.md").read_text(encoding="utf-8") == "reference\n"
+    assert "Content." in skill_md.read_text(encoding="utf-8")
+    assert (skill_md.parent / "ref" / "note.md").read_text(encoding="utf-8") == "reference\n"
 
 
-def test_resolver_rejects_tampered_tarball_without_printing_content(work_tmp):
-    base, allowed_signers = make_base(work_tmp)
-    (base / "cowork" / "skills" / "alpha.tar.gz").write_text("pwned skill content\n", encoding="utf-8")
-
-    result = run_fetch(base.resolve().as_uri(), allowed_signers, work_tmp / "cache", check=False)
-
-    assert result.returncode != 0
-    assert "pwned" not in result.stdout
-    assert "pwned" not in result.stderr
-
-
-def test_resolver_uses_fresh_cache_when_manifest_unavailable(work_tmp):
-    base, allowed_signers = make_base(work_tmp)
+def test_resolver_falls_back_to_cache_when_offline(work_tmp):
+    base = make_skill_server(work_tmp / "base", "alpha")
     cache = work_tmp / "cache"
-    first = run_fetch(base.resolve().as_uri(), allowed_signers, cache)
+    first = run_fetch(base.resolve().as_uri(), cache, "cowork", "alpha")
 
-    result = run_fetch((work_tmp / "missing-base").resolve().as_uri(), allowed_signers, cache)
+    result = run_fetch((work_tmp / "nonexistent").resolve().as_uri(), cache, "cowork", "alpha")
 
-    assert result.stdout == first.stdout
+    assert result.returncode == 0
+    assert result.stdout.strip() == first.stdout.strip()
 
 
-def test_resolver_rejects_stale_cache_when_manifest_unavailable(work_tmp):
-    base, allowed_signers = make_base(work_tmp)
+def test_resolver_fails_when_offline_and_no_cache(work_tmp):
     cache = work_tmp / "cache"
-    first = run_fetch(base.resolve().as_uri(), allowed_signers, cache)
-    skill_md = Path(first.stdout.strip())
-    meta_path = skill_md.parent.parent / "skills-hub-cache.json"
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    meta["generated_at"] = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    meta["max_age_seconds"] = 1
-    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
-    result = run_fetch((work_tmp / "missing-base").resolve().as_uri(), allowed_signers, cache, check=False)
+    result = run_fetch((work_tmp / "nonexistent").resolve().as_uri(), cache, "cowork", "alpha", check=False)
 
     assert result.returncode != 0
     assert not result.stdout.strip()
+
+
+def test_resolver_fails_for_unknown_skill(work_tmp):
+    base = make_skill_server(work_tmp / "base", "alpha")
+    cache = work_tmp / "cache"
+
+    result = run_fetch(base.resolve().as_uri(), cache, "cowork", "nosuchskill", check=False)
+
+    assert result.returncode != 0
+
+
+def test_resolver_overwrites_cache_on_refetch(work_tmp):
+    base = make_skill_server(work_tmp / "base", "alpha", {"SKILL.md": "version 1\n"})
+    cache = work_tmp / "cache"
+    run_fetch(base.resolve().as_uri(), cache, "cowork", "alpha")
+
+    # Update the server content
+    (base / "skills" / "alpha" / "SKILL.md").write_text("version 2\n", encoding="utf-8")
+
+    result = run_fetch(base.resolve().as_uri(), cache, "cowork", "alpha")
+    skill_md = Path(result.stdout.strip())
+    assert skill_md.read_text(encoding="utf-8") == "version 2\n"

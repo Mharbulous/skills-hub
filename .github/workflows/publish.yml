@@ -8,9 +8,6 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      # Deploy only once Firebase and signing secrets are configured; otherwise just build.
-      DEPLOY_READY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && secrets.FIREBASE_PROJECT_ID != '' && secrets.PUBLISH_PATH_TOKEN != '' && secrets.SKILLS_HUB_SIGNING_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -20,37 +17,13 @@ jobs:
 
       - run: pip install pyyaml
 
-      - name: Build skill bundles
-        run: python3 build/build.py
-
-      - name: Sign manifest
-        if: env.DEPLOY_READY == 'true'
-        run: |
-          printf '%s\n' "${{ secrets.SKILLS_HUB_SIGNING_KEY }}" > "$RUNNER_TEMP/skills_hub_signing_key"
-          chmod 600 "$RUNNER_TEMP/skills_hub_signing_key"
-          ssh-keygen -Y sign -f "$RUNNER_TEMP/skills_hub_signing_key" -n skills-hub-manifest dist/manifest.json
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Stage site under path token
-        if: env.DEPLOY_READY == 'true'
-        run: |
-          mkdir -p "site/${{ secrets.PUBLISH_PATH_TOKEN }}"
-          cp -r dist/. "site/${{ secrets.PUBLISH_PATH_TOKEN }}/"
+      - name: Build index
+        run: python3 build/build_index.py
 
       - name: Deploy to Firebase Hosting
-        if: env.DEPLOY_READY == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
           channelId: live
-
-      - name: Note skipped deploy
-        if: env.DEPLOY_READY != 'true'
-        run: echo "Firebase/signing secrets not configured yet; built unsigned dist/ only (see README one-time setup)."

@@ -1,3 +1,7 @@
+public/claude/
+public/codex/
+public/cowork/
+public/index.json
 dist/
 site/
 .firebase/
