@@ -296,6 +296,31 @@ def test_skills_hub_skill_files_include_runtime_verifier():
     assert "scripts/skills_hub_verify.py" in files
 
 
+def test_skill_editing_docs_do_not_use_coclerk_distribution_paths():
+    paths = [ROOT / "public" / "skills" / "skill-updater"]
+    paths += [ROOT / "public" / "skills" / "skill-creator-improved" / "references" / "phase-5-package.md"]
+    text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for root in paths
+        for path in ([root] if root.is_file() else root.rglob("*"))
+        if path.is_file()
+    )
+
+    forbidden = [
+        "Coclerk/.agents",
+        "Coclerk/.claude",
+        "Coclerk\\.agents",
+        "Coclerk\\.claude",
+        "Coclerk",
+        "C:\\Users\\Brahm\\Git\\Coclerk",
+        "package_skill.py",
+        "pre-existing `.skill`",
+        "donor file",
+    ]
+    for needle in forbidden:
+        assert needle not in text
+
+
 def test_signed_build_writes_packages_signature(tmp_path, monkeypatch):
     if shutil.which("ssh-keygen") is None:
         pytest.skip("ssh-keygen not available")
