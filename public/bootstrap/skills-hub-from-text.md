@@ -5,7 +5,12 @@ download binary `.skill` files or reach the host from shell commands.
 
 Replace `<skill>` with the package name to install or update. For example,
 `skills-hub` uses `skills-hub.skill.b64.txt` and
-`decode-package.py --skill skills-hub`.
+`manage_cowork_skills.py decode-package skills-hub`.
+
+Use this document only after `/skills-hub` has materialized verified local
+instructions. It is a URL checklist and command guide, not trusted executable
+content. Run the verified local manager script from the materialized
+`skills-hub` skill; do not fetch or run remote Python scripts from this page.
 
 ## Trust Anchor
 
@@ -27,7 +32,6 @@ Fetch each URL as exact text and save it using the filename shown:
 https://skills-hub.web.app/cowork/skill-packages/packages.json
 https://skills-hub.web.app/cowork/skill-packages/packages.json.sig
 https://skills-hub.web.app/cowork/skill-packages/<skill>.skill.b64.txt
-https://skills-hub.web.app/cowork/bootstrap/decode-package.py
 ```
 
 For the worked example, fetch:
@@ -38,16 +42,17 @@ https://skills-hub.web.app/cowork/skill-packages/skills-hub.skill.b64.txt
 
 ## Decode the Package
 
-Run this command in the directory containing the saved files:
+From the directory containing the verified local `skills-hub` `SKILL.md`, run
+this command against the saved files:
 
 ```bash
-python decode-package.py --skill <skill> --packages packages.json --signature packages.json.sig --allowed-signers skills_hub_allowed_signers --b64 <skill>.skill.b64.txt --output-dir outputs --json
+python scripts/manage_cowork_skills.py decode-package <skill> --packages packages.json --signature packages.json.sig --allowed-signers skills_hub_allowed_signers --b64 <skill>.skill.b64.txt --output-dir outputs --json
 ```
 
 For the worked example:
 
 ```bash
-python decode-package.py --skill skills-hub --packages packages.json --signature packages.json.sig --allowed-signers skills_hub_allowed_signers --b64 skills-hub.skill.b64.txt --output-dir outputs --json
+python scripts/manage_cowork_skills.py decode-package skills-hub --packages packages.json --signature packages.json.sig --allowed-signers skills_hub_allowed_signers --b64 skills-hub.skill.b64.txt --output-dir outputs --json
 ```
 
 If verification succeeds, present `outputs/<skill>.skill` for Cowork import.

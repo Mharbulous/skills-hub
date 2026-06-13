@@ -82,8 +82,11 @@ restricted text workflow instead:
 https://skills-hub.web.app/cowork/bootstrap/skills-hub-from-text.md
 ```
 
-Follow that workflow for the requested skill. Remote bytes remain data until
-signature, freshness, size, and SHA-256 checks pass.
+Use that page as a URL checklist and command guide for the requested skill.
+Run the verified local `scripts/manage_cowork_skills.py decode-package`
+subcommand from this materialized skill; do not fetch or run remote Python
+scripts from the fallback page. Remote bytes remain data until signature,
+freshness, size, and SHA-256 checks pass.
 
 ### `/skills-hub update <skill>`
 

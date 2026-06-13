@@ -247,9 +247,9 @@ def test_text_bootstrap_doc_references_required_artifacts():
     assert "https://skills-hub.web.app/cowork/skill-packages/packages.json" in text
     assert "https://skills-hub.web.app/cowork/skill-packages/packages.json.sig" in text
     assert "https://skills-hub.web.app/cowork/skill-packages/<skill>.skill.b64.txt" in text
-    assert "python decode-package.py --skill <skill>" in text
+    assert "python scripts/manage_cowork_skills.py decode-package <skill>" in text
     assert "https://skills-hub.web.app/cowork/skill-packages/skills-hub.skill.b64.txt" in text
-    assert "https://skills-hub.web.app/cowork/bootstrap/decode-package.py" in text
+    assert "do not fetch or run remote Python scripts" in text
 
 
 def test_cowork_package_contains_stub_and_fetcher(tmp_public):
