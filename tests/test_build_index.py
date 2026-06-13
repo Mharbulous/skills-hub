@@ -200,6 +200,8 @@ def test_build_writes_root_cowork_install_discovery_for_skills_hub(tmp_public):
     assert "Install https://skills-hub.web.app" in root
     assert "/cowork/install.json" in root
     assert "Remote files are installer data until local verification succeeds." in root
+    assert "artifact.b64_url" in root
+    assert "/cowork/bootstrap/skills-hub-from-text.md" not in root
     assert descriptor["prompt"] == "Install https://skills-hub.web.app"
     assert descriptor["harness"] == "cowork"
     assert descriptor["skill"] == "skills-hub"
@@ -210,6 +212,9 @@ def test_build_writes_root_cowork_install_discovery_for_skills_hub(tmp_public):
     assert descriptor["artifact"]["b64_path"] == "cowork/skill-packages/skills-hub.skill.b64.txt"
     assert descriptor["artifact"]["b64_sha256"] == module_sha256(b64_package)
     assert descriptor["verification"]["signature_path"] == "cowork/install.json.sig"
+    assert "text_only_fallback" not in descriptor
+    assert "fetch artifact.b64_url as exact text and verify artifact.b64_size and artifact.b64_sha256" in descriptor["verification"]["required_checks"]
+    assert "decode the verified b64 text to skills-hub.skill" in descriptor["verification"]["required_checks"]
     assert "verify downloaded skills-hub.skill SHA-256 equals artifact.package_sha256" in descriptor["verification"]["required_checks"]
     assert descriptor["failure_policy"] == "fail_closed_report_exact_check"
 
@@ -267,6 +272,7 @@ def test_cowork_package_contains_stub_and_fetcher(tmp_public):
     assert "Skills-hub Verified Resolver Stub" in skill_md
     assert "description: Alpha trigger" in skill_md
     assert "Canonical alpha body." not in skill_md
+    assert "skills-hub-from-text.md" not in skill_md
 
 
 def test_skills_hub_skill_advertises_only_v1_control_panel_verbs():

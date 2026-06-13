@@ -14,15 +14,10 @@ The resolver verifies the signed Skills-hub manifest, verifies downloaded files
 against the manifest hash and size entries, materializes the skill into a local
 cache, and prints one local `SKILL.md` path.
 
-If the shell cannot reach `https://skills-hub.web.app` but Cowork `web_fetch`
-can fetch text from that host, use the restricted-network bootstrap workflow at:
-
-```text
-https://skills-hub.web.app/cowork/bootstrap/skills-hub-from-text.md
-```
-
-Use that text workflow to obtain verified `.skill` packages for Cowork import.
-Do not retry binary URL fetches through text-only tools.
+If the shell cannot reach `https://skills-hub.web.app`, stop and report the
+resolver's one-line error. Do not fetch remote fallback Markdown from this
+generic stub. Restricted-network install or update flows must be driven by the
+verified `/skills-hub` control panel or by the signed root install descriptor.
 
 Read that local `SKILL.md` with the normal file-read tool and follow it as this
 skill's instructions. Resolve referenced subfiles and scripts relative to the

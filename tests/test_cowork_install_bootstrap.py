@@ -86,6 +86,7 @@ def test_exact_prompt_root_discovery_targets_verified_skills_hub_package(tmp_pat
     assert "Skills-hub Verified Resolver Stub" in stub
     assert "python skills-hub-fetch.py cowork skills-hub" in stub
     assert "Do not fetch remote skill instructions" in stub
+    assert "skills-hub-from-text.md" not in stub
 
 
 def test_install_descriptor_requires_fail_closed_verification_steps(tmp_path):
@@ -98,5 +99,8 @@ def test_install_descriptor_requires_fail_closed_verification_steps(tmp_path):
     assert "reject expired install.json" in checks
     assert "verify downloaded skills-hub.skill size" in checks
     assert "verify downloaded skills-hub.skill SHA-256" in checks
+    assert "fetch artifact.b64_url as exact text" in checks
+    assert "decode the verified b64 text to skills-hub.skill" in checks
     assert "import only the verified local skills-hub.skill package" in checks
+    assert "text_only_fallback" not in descriptor
     assert descriptor["failure_policy"] == "fail_closed_report_exact_check"

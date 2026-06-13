@@ -170,8 +170,9 @@ Install https://skills-hub.web.app
 The root page links `/cowork/install.json`, but current Cowork builds route that
 plain `Install` prompt through the registry-only plugin installer. Until Cowork
 supports URL install descriptors directly, use the signed descriptor prompt in
-[Setup](#setup). If binary package download is not available, use
-`/cowork/bootstrap/skills-hub-from-text.md`.
+[Setup](#setup). If binary package download is not available, use the descriptor's
+declared `artifact.b64_url`, then verify the b64 text and decoded package against
+the descriptor before import.
 
 ## Override Semantics
 
