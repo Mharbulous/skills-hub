@@ -17,8 +17,10 @@ jobs:
 
       - run: pip install pyyaml
 
-      - name: Build index
-        run: python3 build/build_index.py
+      - name: Build signed artifacts
+        env:
+          SKILLS_HUB_SIGNING_KEY: ${{ secrets.SKILLS_HUB_SIGNING_KEY }}
+        run: python3 build/build_index.py --require-signature
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0

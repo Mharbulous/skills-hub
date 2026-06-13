@@ -2,6 +2,8 @@ public/claude/
 public/codex/
 public/cowork/
 public/index.json
+public/manifest.json
+public/manifest.json.sig
 dist/
 site/
 .firebase/

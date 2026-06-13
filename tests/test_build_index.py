@@ -15,6 +15,9 @@ def load_build_module(public_dir):
     spec.loader.exec_module(module)
     module.PUBLIC = public_dir
     module.SKILLS = public_dir / "skills"
+    module.COWORK_PACKAGE_DIR = public_dir / "cowork" / "skill-packages"
+    module.MANIFEST = public_dir / "manifest.json"
+    module.MANIFEST_SIG = public_dir / "manifest.json.sig"
     return module
 
 
@@ -36,8 +39,11 @@ def tmp_public(tmp_path):
 
 
 def run_build(tmp_public):
+    bootstrap = tmp_public / "bootstrap"
+    bootstrap.mkdir(parents=True, exist_ok=True)
+    (bootstrap / "skills-hub-fetch.py").write_text("# fetcher\n", encoding="utf-8")
     module = load_build_module(tmp_public)
-    module.main()
+    module.main([])
     return module
 
 
@@ -124,3 +130,31 @@ def test_subfiles_included_in_files_list(tmp_public):
     files = index["skills"][0]["harnesses"]["claude"]["files"]
     assert "SKILL.md" in files
     assert "scripts/tool.sh" in files
+
+
+def test_build_writes_manifest_with_package_entry(tmp_public):
+    make_skill(tmp_public / "skills", "alpha")
+
+    run_build(tmp_public)
+
+    manifest = json.loads((tmp_public / "manifest.json").read_text(encoding="utf-8"))
+    package_entry = manifest["files"]["cowork/skill-packages/alpha.skill"]
+    package = tmp_public / "cowork" / "skill-packages" / "alpha.skill"
+    assert manifest["schema_version"] == 3
+    assert package_entry["size"] == package.stat().st_size
+
+
+def test_cowork_package_contains_stub_and_fetcher(tmp_public):
+    make_skill(tmp_public / "skills", "alpha", description="Alpha trigger")
+
+    run_build(tmp_public)
+
+    import zipfile
+
+    package = tmp_public / "cowork" / "skill-packages" / "alpha.skill"
+    with zipfile.ZipFile(package) as zf:
+        names = set(zf.namelist())
+        skill_md = zf.read("alpha/SKILL.md").decode("utf-8")
+    assert names == {"alpha/SKILL.md", "alpha/skills-hub-fetch.py", "alpha/skills_hub_allowed_signers"}
+    assert "Skills-hub Verified Resolver Stub" in skill_md
+    assert "description: Alpha trigger" in skill_md

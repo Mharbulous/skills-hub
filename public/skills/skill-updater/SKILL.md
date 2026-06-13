@@ -27,6 +27,12 @@ evals to discover improvements, or optimizing the description against a
 trigger-eval set. Those all belong to `skill-creator-improved`. If the user is
 still figuring out *what* the change should be, route them there.
 
+**Skills-hub lifecycle exception:** If the user wants to install, update,
+inventory, replace stale Myskillium/Skills-hub wrappers, or assimilate a skill
+into the Skills-hub repo, stop and use `skills-hub` instead. This skill may edit
+an individual skill file, but it must not manage Cowork Skills-hub package
+imports or verified wrapper replacement.
+
 ## The primary axis
 
 **Does the user want to review the revised skill before it replaces the
