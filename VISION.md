@@ -60,7 +60,7 @@ depend on Coclerk or any other product repo as a packaging source.
 ### Litmus Test
 
 Can a new machine install or import the skill using only this repository's
-generated artifacts or the hosted `/hub` output, without reading any Coclerk
+generated artifacts or the hosted `skills-hub.web.app` output, without reading any Coclerk
 source, wrapper, or plugin package? If yes, the change belongs in Skills-hub. If
 no, the design is still coupled to the system Skills-hub is replacing.
 
@@ -85,7 +85,7 @@ generated outputs appropriate to its runtime.
 
 ### Killer Use Case
 
-Add a new Cowork skill to `skills/`, build and deploy skills-hub, import a
+Add a new Cowork skill to `public/skills/`, build and deploy skills-hub, import a
 skills-hub-generated Cowork package or wrapper artifact, and confirm Cowork
 resolves the signed hosted skill without requesting access to Coclerk's local
 skill repo.
@@ -107,8 +107,9 @@ skill folders and no dependency on Coclerk-local packaging.
 
 - Firebase Hosting remains a static transport; integrity comes from signed
   manifests and local trust anchors, not from obscurity or domain trust alone.
-- `skills/` is the canonical source tree for skill definitions in this repo.
-- `public/` is the generated artifact contract for harness consumers.
+- `public/skills/` is the canonical source tree for skill definitions in this repo.
+- Generated artifact paths under `public/` are the artifact contract for harness
+  consumers.
 - Cowork needs importable wrapper artifacts generated from skills-hub output,
   not packages produced by Coclerk.
 - Claude and Codex should read verified full local installs before skill
