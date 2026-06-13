@@ -5,6 +5,13 @@
     "ignore": ["firebase.json", "**/.*"],
     "headers": [
       {
+        "source": "**/*.skill",
+        "headers": [
+          { "key": "Content-Type", "value": "application/zip" },
+          { "key": "Content-Disposition", "value": "attachment" }
+        ]
+      },
+      {
         "source": "**",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache" },
