@@ -11,6 +11,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,35 +45,47 @@ def parse_timestamp(value: str) -> datetime:
     return parsed
 
 
-def verify_signature(packages_path: Path, signature_path: Path, allowed_signers: Path) -> None:
+def canonical_json_bytes(value: dict) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def normalized_signature_bytes(path: Path) -> bytes:
+    try:
+        return path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+    except OSError as exc:
+        fail(f"packages signature is missing: {path}: {exc}")
+
+
+def verify_signature(packages: dict, signature_path: Path, allowed_signers: Path) -> None:
     if shutil.which("ssh-keygen") is None:
         fail("ssh-keygen is required for package index verification")
-    if not packages_path.is_file():
-        fail(f"packages index is missing: {packages_path}")
     if not signature_path.is_file():
         fail(f"packages signature is missing: {signature_path}")
     if not allowed_signers.is_file():
         fail(f"allowed signers file is missing: {allowed_signers}")
     if not allowed_signers.read_text(encoding="utf-8").strip():
         fail(f"allowed signers file is empty: {allowed_signers}")
-    result = subprocess.run(
-        [
-            "ssh-keygen",
-            "-Y",
-            "verify",
-            "-f",
-            str(allowed_signers),
-            "-I",
-            SIGNING_IDENTITY,
-            "-n",
-            SIGNING_NAMESPACE,
-            "-s",
-            str(signature_path),
-        ],
-        input=packages_path.read_bytes(),
-        capture_output=True,
-        check=False,
-    )
+    with tempfile.TemporaryDirectory(prefix="skills-hub-packages-sig-") as tmp:
+        normalized_sig = Path(tmp) / "packages.json.sig"
+        normalized_sig.write_bytes(normalized_signature_bytes(signature_path))
+        result = subprocess.run(
+            [
+                "ssh-keygen",
+                "-Y",
+                "verify",
+                "-f",
+                str(allowed_signers),
+                "-I",
+                SIGNING_IDENTITY,
+                "-n",
+                SIGNING_NAMESPACE,
+                "-s",
+                str(normalized_sig),
+            ],
+            input=canonical_json_bytes(packages),
+            capture_output=True,
+            check=False,
+        )
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         fail(f"packages signature verification failed: {detail}")
@@ -114,8 +127,9 @@ def decode_base64(path: Path) -> bytes:
 
 
 def decode_package(skill: str, packages_path: Path, signature_path: Path, allowed_signers: Path, b64_path: Path, output_dir: Path) -> DecodeResult:
-    verify_signature(packages_path, signature_path, allowed_signers)
-    entry = package_entry(load_packages(packages_path), skill)
+    packages = load_packages(packages_path)
+    verify_signature(packages, signature_path, allowed_signers)
+    entry = package_entry(packages, skill)
     output_dir.mkdir(parents=True, exist_ok=True)
     package_path = output_dir / f"{skill}.skill"
     data = decode_base64(b64_path)

@@ -258,6 +258,10 @@ def build_package_index(generated_at):
     }
 
 
+def canonical_json_bytes(value):
+    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
+
+
 def signing_key_from_env():
     value = os.environ.get("SKILLS_HUB_SIGNING_KEY")
     if not value:
@@ -365,6 +369,61 @@ def sign_manifest(require_signature):
     return sign_artifact(MANIFEST, MANIFEST_SIG, require_signature)
 
 
+def sign_package_index(package_index, require_signature):
+    key_path, temp_key = signing_key_from_env()
+    if PACKAGE_INDEX_SIG.exists():
+        PACKAGE_INDEX_SIG.unlink()
+    canonical = None
+    try:
+        if not key_path:
+            if require_signature:
+                sys.exit("SKILLS_HUB_SIGNING_KEY is required to sign packages.json")
+            return False
+        public_allowed = PUBLIC / "bootstrap" / "skills_hub_allowed_signers"
+        public_key = subprocess.run(
+            ["ssh-keygen", "-y", "-f", str(key_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if public_key not in public_allowed.read_text(encoding="utf-8"):
+            sys.exit("SKILLS_HUB_SIGNING_KEY does not match skills_hub_allowed_signers")
+        canonical = tempfile.NamedTemporaryFile("wb", delete=False)
+        canonical.write(canonical_json_bytes(package_index))
+        canonical.close()
+        canonical_path = Path(canonical.name)
+        subprocess.run(
+            [
+                "ssh-keygen",
+                "-Y",
+                "sign",
+                "-f",
+                str(key_path),
+                "-n",
+                SIGNING_NAMESPACE,
+                str(canonical_path),
+            ],
+            check=True,
+        )
+        generated = canonical_path.with_name(canonical_path.name + ".sig")
+        if generated.exists():
+            generated.replace(PACKAGE_INDEX_SIG)
+        if not PACKAGE_INDEX_SIG.is_file():
+            sys.exit("ssh-keygen did not produce packages.json.sig")
+        return True
+    finally:
+        if canonical:
+            try:
+                Path(canonical.name).unlink()
+            except OSError:
+                pass
+        if temp_key:
+            try:
+                temp_key.unlink()
+            except OSError:
+                pass
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--require-signature", action="store_true")
@@ -383,11 +442,12 @@ def main(argv=None):
     catalog = build_catalog(skill_dirs)
     generated_at = datetime.now(timezone.utc).isoformat()
     write_cowork_bootstrap()
+    package_index = build_package_index(generated_at)
     PACKAGE_INDEX.write_text(
-        json.dumps(build_package_index(generated_at), indent=2, ensure_ascii=False) + "\n",
+        json.dumps(package_index, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    packages_signed = sign_artifact(PACKAGE_INDEX, PACKAGE_INDEX_SIG, args.require_signature)
+    packages_signed = sign_package_index(package_index, args.require_signature)
     index = {
         "schema_version": INDEX_SCHEMA_VERSION,
         "generated_at": generated_at,

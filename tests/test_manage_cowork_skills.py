@@ -108,7 +108,15 @@ def write_signed_packages(base_dir, key, package_data=b"package"):
     }
     packages_path = base_dir / "packages.json"
     packages_path.write_text(json.dumps(package_index, indent=2), encoding="utf-8")
-    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(packages_path)], check=True)
+    canonical = base_dir / "packages.canonical.json"
+    canonical.write_text(
+        json.dumps(package_index, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(canonical)], check=True)
+    (base_dir / "packages.canonical.json.sig").replace(base_dir / "packages.json.sig")
+    canonical.unlink()
     return packages_path, base_dir / "packages.json.sig"
 
 
@@ -330,6 +338,8 @@ def test_decode_package_json_works_from_text_artifacts(tmp_path, capsys):
     manager = load_manager()
     key, allowed = make_signing_material(tmp_path)
     packages, signature = write_signed_packages(tmp_path, key, b"package")
+    packages.write_bytes(packages.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
+    signature.write_bytes(signature.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
     b64 = tmp_path / "alpha.skill.b64.txt"
     b64.write_text("\r\n".join(base64.b64encode(b"package").decode("ascii")), encoding="ascii")
 
