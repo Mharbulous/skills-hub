@@ -32,7 +32,7 @@ stable once owner-reviewed.
 Skills-hub is the static, signed, unauthenticated source of truth for
 agent skill delivery across Claude, Codex, and Cowork. It replaces local
 repo-backed skill distribution: harnesses may consume generated files from this
-repo or from the deployed `skills-hub.web.app/hub` artifacts, but they must not
+repo or from the deployed `skills-hub.web.app` artifacts, but they must not
 depend on Coclerk or any other product repo as a packaging source.
 
 ### Design Principles

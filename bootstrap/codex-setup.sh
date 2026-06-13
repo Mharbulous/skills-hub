@@ -2,7 +2,7 @@
 # Install verified Skills-hub skills into a Codex environment.
 #
 # Usage:
-#   SKILLS_BASE_URL="https://skills-hub.web.app/hub" ./codex-setup.sh [--full] [dest]
+#   SKILLS_BASE_URL="https://skills-hub.web.app" ./codex-setup.sh [--full] [dest]
 #
 # Default installs the full verified bundle before skill enumeration. --full is
 # accepted as a compatibility alias.
@@ -59,7 +59,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 PYTHON_BIN="$(find_python)"
-BASE_URL="${SKILLS_BASE_URL:?Set SKILLS_BASE_URL to https://skills-hub.web.app/hub}"
+BASE_URL="${SKILLS_BASE_URL:?Set SKILLS_BASE_URL to https://skills-hub.web.app}"
 BASE_URL="${BASE_URL%/}"
 DEST="${DEST:-$DEFAULT_DEST}"
 ARCHIVE_NAME="skills.tar.gz"

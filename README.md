@@ -3,7 +3,7 @@
 Skills-hub is the static source of truth for agent skills served from:
 
 ```text
-https://skills-hub.web.app/hub/
+https://skills-hub.web.app/
 ```
 
 Skills are edited in this repo. `build/build.py` merges canonical definitions
@@ -83,8 +83,8 @@ Claude Code and Codex install full verified local bundles before skill
 enumeration:
 
 ```bash
-SKILLS_BASE_URL="https://skills-hub.web.app/hub" ./bootstrap/claude-setup.sh
-SKILLS_BASE_URL="https://skills-hub.web.app/hub" ./bootstrap/codex-setup.sh
+SKILLS_BASE_URL="https://skills-hub.web.app" ./bootstrap/claude-setup.sh
+SKILLS_BASE_URL="https://skills-hub.web.app" ./bootstrap/codex-setup.sh
 ```
 
 `--full` is accepted as a compatibility alias; full verified install is now the
