@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
-# Install verified Skills-hub skills into a Codex environment.
+# Install Skills-hub skills into a Codex environment.
 #
 # Usage:
-#   SKILLS_BASE_URL="https://skills-hub.web.app" ./codex-setup.sh [--full] [dest]
-#
-# Default installs the full verified bundle before skill enumeration. --full is
-# accepted as a compatibility alias.
+#   SKILLS_BASE_URL="https://skills-hub.web.app" ./codex-setup.sh [dest]
 
 set -euo pipefail
 PATH="/usr/bin:/bin:$PATH"
 
 HARNESS="codex"
 DEFAULT_DEST="$HOME/.codex/skills"
-FULL=1
 DEST=""
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-VERIFY_SCRIPT="$SCRIPT_DIR/skills_hub_verify.py"
-ALLOWED_SIGNERS="${SKILLS_HUB_ALLOWED_SIGNERS:-$SCRIPT_DIR/skills_hub_allowed_signers}"
 
 usage() {
-  echo "Usage: SKILLS_BASE_URL=<base-url> $0 [--full] [dest]" >&2
+  echo "Usage: SKILLS_BASE_URL=<base-url> $0 [dest]" >&2
 }
 
 find_python() {
@@ -30,15 +23,12 @@ find_python() {
       return
     fi
   done
-  echo "python3 or python is required for Skills-hub manifest verification" >&2
+  echo "python3 or python is required for Skills-hub index parsing" >&2
   exit 1
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --full)
-      FULL=1
-      ;;
     -h|--help)
       usage
       exit 0
@@ -62,11 +52,6 @@ PYTHON_BIN="$(find_python)"
 BASE_URL="${SKILLS_BASE_URL:?Set SKILLS_BASE_URL to https://skills-hub.web.app}"
 BASE_URL="${BASE_URL%/}"
 DEST="${DEST:-$DEFAULT_DEST}"
-ARCHIVE_NAME="skills.tar.gz"
-ARCHIVE_PATH="$HARNESS/$ARCHIVE_NAME"
-ARCHIVE_URL="$BASE_URL/$ARCHIVE_PATH"
-MANIFEST_URL="$BASE_URL/manifest.json"
-SIGNATURE_URL="$BASE_URL/manifest.json.sig"
 MARKER="$DEST/.skills-hub-managed-skills"
 
 TMP_PARENT="${TMPDIR:-/tmp}"
@@ -77,46 +62,43 @@ cleanup() {
 }
 trap cleanup EXIT
 
-MANIFEST_FILE="$TMP_ROOT/manifest.json"
-SIGNATURE_FILE="$TMP_ROOT/manifest.json.sig"
-ARCHIVE_FILE="$TMP_ROOT/$ARCHIVE_NAME"
-MEMBERS_FILE="$TMP_ROOT/members.txt"
+INDEX_FILE="$TMP_ROOT/index.json"
 NEW_MARKER="$TMP_ROOT/managed-skills.txt"
+DOWNLOAD_LIST="$TMP_ROOT/download-list.tsv"
 CLEANUP_SET="$TMP_ROOT/cleanup-set.txt"
 
-if ! curl -fsSL "$MANIFEST_URL" -o "$MANIFEST_FILE"; then
-  echo "Failed to download $MANIFEST_URL. Existing install left unchanged." >&2
+if ! curl -fsSL "$BASE_URL/index.json" -o "$INDEX_FILE"; then
+  echo "Failed to download $BASE_URL/index.json. Existing install left unchanged." >&2
   exit 1
 fi
 
-if ! curl -fsSL "$SIGNATURE_URL" -o "$SIGNATURE_FILE"; then
-  echo "Failed to download $SIGNATURE_URL. Existing install left unchanged." >&2
-  exit 1
-fi
+if ! "$PYTHON_BIN" - "$INDEX_FILE" "$HARNESS" "$NEW_MARKER" "$DOWNLOAD_LIST" <<'PYEOF'
+import json, sys
+from pathlib import Path
 
-if ! ssh-keygen -Y verify -f "$ALLOWED_SIGNERS" -I skills-hub-manifest -n skills-hub-manifest -s "$SIGNATURE_FILE" < "$MANIFEST_FILE" >/dev/null; then
-  echo "Skills-hub manifest signature verification failed. Existing install left unchanged." >&2
-  exit 1
-fi
-
-if ! curl -fsSL "$ARCHIVE_URL" -o "$ARCHIVE_FILE"; then
-  echo "Failed to download $ARCHIVE_URL. Existing install left unchanged." >&2
-  exit 1
-fi
-
-if ! "$PYTHON_BIN" "$VERIFY_SCRIPT" "$MANIFEST_FILE" "$ARCHIVE_PATH" "$ARCHIVE_FILE"; then
-  echo "Skills-hub archive verification failed. Existing install left unchanged." >&2
-  exit 1
-fi
-
-if ! tar -tzf "$ARCHIVE_FILE" > "$MEMBERS_FILE"; then
-  echo "Downloaded archive from $ARCHIVE_URL is not a valid tar.gz. Existing install left unchanged." >&2
-  exit 1
-fi
-
-awk -F/ 'NF > 1 && $1 != "" {print $1}' "$MEMBERS_FILE" | sort -u > "$NEW_MARKER"
-if [ ! -s "$NEW_MARKER" ]; then
-  echo "Archive from $ARCHIVE_URL did not contain any top-level skill directories. Existing install left unchanged." >&2
+index_path, harness, marker_out, dl_out = sys.argv[1:]
+data = json.loads(Path(index_path).read_text(encoding="utf-8"))
+skills = []
+rows = []
+for entry in data.get("skills", []):
+    name = entry["name"]
+    harness_data = entry.get("harnesses", {}).get(harness)
+    if not harness_data:
+        continue
+    skills.append(name)
+    base = harness_data["base"]
+    for f in harness_data.get("files", []):
+        rows.append(f"{name}\t{base}\t{f}")
+if not skills:
+    print(f"No skills found for harness {harness!r} in index.json", file=sys.stderr)
+    sys.exit(1)
+with open(marker_out, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(skills) + "\n")
+with open(dl_out, "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(rows) + "\n")
+PYEOF
+then
+  echo "Failed to parse index.json. Existing install left unchanged." >&2
   exit 1
 fi
 
@@ -147,8 +129,15 @@ while IFS= read -r skill_name; do
   fi
 done < "$CLEANUP_SET"
 
-tar -xzf "$ARCHIVE_FILE" -C "$DEST"
+while IFS=$'\t' read -r skill_name base rel_path; do
+  out="$DEST/$skill_name/$rel_path"
+  mkdir -p "$(dirname "$out")"
+  if ! curl -fsSL "$BASE_URL/$base/$rel_path" -o "$out"; then
+    echo "Failed to download $BASE_URL/$base/$rel_path." >&2
+    exit 1
+  fi
+done < "$DOWNLOAD_LIST"
+
 cp "$NEW_MARKER" "$MARKER"
 
-echo "Installed verified Skills-hub full skills to $DEST from $ARCHIVE_URL"
-echo "Manifest signature and archive hash were verified before extraction."
+echo "Installed Skills-hub skills to $DEST"

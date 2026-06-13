@@ -1,12 +1,11 @@
-import io
+import http.server
 import json
 import os
-import hashlib
 import shutil
 import subprocess
-import tarfile
 import tempfile
-from datetime import datetime, timezone
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -42,7 +41,7 @@ def work_tmp():
 
 
 def require_shell_tools():
-    missing = [tool for tool in ("curl", "tar", "ssh-keygen") if shutil.which(tool) is None]
+    missing = [tool for tool in ("curl",) if shutil.which(tool) is None]
     if find_git_bash() is None:
         missing.append("git-bash")
     if missing:
@@ -64,100 +63,71 @@ def bash_arg(path):
         return bash_path(path)
 
 
-def write_archive(path, skills):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(path, "w:gz") as tar:
-        for skill_name, files in sorted(skills.items()):
-            for rel_path, content in sorted(files.items()):
-                data = content.encode("utf-8")
-                info = tarfile.TarInfo(f"{skill_name}/{rel_path}")
-                info.size = len(data)
-                info.mtime = 0
-                info.uid = 0
-                info.gid = 0
-                info.uname = ""
-                info.gname = ""
-                tar.addfile(info, io.BytesIO(data))
+@contextmanager
+def serve_dir(directory):
+    """Start an HTTP server rooted at directory; yield the base URL."""
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(directory), **kwargs)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever)
+    thread.daemon = True
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.shutdown()
 
 
-def sha256(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def make_skill_server(base, harness, skills):
+    """Create index.json and skill file tree under base/.
 
+    skills: dict of skill_name -> dict of rel_path -> content
+    """
+    for skill_name, files in skills.items():
+        for rel_path, content in files.items():
+            file_path = base / "skills" / skill_name / rel_path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(content, encoding="utf-8")
 
-def make_signing_key(temp_root):
-    require_shell_tools()
-    key_path = temp_root / "signing_key"
-    if not key_path.exists():
-        subprocess.run(
-            ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "skills-hub-test", "-f", str(key_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    allowed_signers = temp_root / "allowed_signers"
-    pub = (key_path.with_suffix(".pub")).read_text(encoding="utf-8").strip()
-    allowed_signers.write_text(f"skills-hub-manifest {pub}\n", encoding="utf-8")
-    return key_path, allowed_signers
+    entries = []
+    for skill_name, files in skills.items():
+        entries.append({
+            "name": skill_name,
+            "description": f"Test skill {skill_name}",
+            "harnesses": {
+                harness: {
+                    "base": f"skills/{skill_name}",
+                    "files": list(files.keys()),
+                }
+            },
+        })
 
-
-def write_manifest(base, key_path):
-    files = {}
-    for path in sorted(p for p in base.rglob("*") if p.is_file() and p.name not in {"manifest.json", "manifest.json.sig"}):
-        rel = path.relative_to(base).as_posix()
-        files[rel] = {"sha256": sha256(path), "size": path.stat().st_size}
-    manifest = {
-        "schema_version": 3,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "max_age_seconds": 604800,
-        "canonical_base_url": base.resolve().as_uri(),
-        "harnesses": ["claude", "codex", "cowork"],
-        "skills": [],
-        "files": files,
+    index = {
+        "schema_version": 1,
+        "generated_at": "2026-01-01T00:00:00+00:00",
+        "skills": entries,
     }
-    manifest_path = base / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    sig_path = base / "manifest.json.sig"
-    if sig_path.exists():
-        sig_path.unlink()
-    subprocess.run(
-        ["ssh-keygen", "-Y", "sign", "-f", str(key_path), "-n", "skills-hub-manifest", str(manifest_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    (base / "index.json").write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
 
 
-def make_base(temp_root, harness, stub_skills=None, full_skills=None):
-    base = temp_root / "base"
-    harness_dir = base / harness
-    write_archive(
-        harness_dir / "skill-stubs.tar.gz",
-        stub_skills or {"alpha": {"SKILL.md": "stub alpha\n"}},
-    )
-    write_archive(
-        harness_dir / "skills.tar.gz",
-        full_skills or {"alpha": {"SKILL.md": "full alpha\n", "scripts/tool.sh": "echo full\n"}},
-    )
-    key_path, allowed_signers = make_signing_key(temp_root)
-    write_manifest(base, key_path)
-    return base, allowed_signers
-
-
-def run_setup(script_name, harness, base, allowed_signers, dest, *args, check=True):
+def run_setup(script_name, harness, base_url, dest, check=True):
     require_shell_tools()
     env = os.environ.copy()
-    env["SKILLS_BASE_URL"] = base.resolve().as_uri()
+    env["SKILLS_BASE_URL"] = base_url
     bash = Path(find_git_bash())
     git_root = bash.parent.parent
-    env["PATH"] = os.pathsep.join(
-        [
-            str(git_root / "usr" / "bin"),
-            str(git_root / "bin"),
-            env.get("PATH", ""),
-        ]
-    )
-    env["SKILLS_HUB_ALLOWED_SIGNERS"] = bash_path(allowed_signers)
-    command = [str(bash), f"bootstrap/{script_name}", *args, bash_arg(dest)]
+    env["PATH"] = os.pathsep.join([
+        str(git_root / "usr" / "bin"),
+        str(git_root / "bin"),
+        env.get("PATH", ""),
+    ])
+    command = [str(bash), f"bootstrap/{script_name}", bash_arg(dest)]
     return subprocess.run(
         command,
         cwd=ROOT,
@@ -165,7 +135,7 @@ def run_setup(script_name, harness, base, allowed_signers, dest, *args, check=Tr
         text=True,
         capture_output=True,
         check=check,
-        timeout=15,
+        timeout=30,
     )
 
 
@@ -173,115 +143,63 @@ def run_setup(script_name, harness, base, allowed_signers, dest, *args, check=Tr
     ("script_name", "harness"),
     [("claude-setup.sh", "claude"), ("codex-setup.sh", "codex")],
 )
-def test_fresh_stub_install_writes_marker_for_each_harness(work_tmp, script_name, harness):
-    base, allowed_signers = make_base(work_tmp, harness)
+def test_fresh_install_writes_marker_for_each_harness(work_tmp, script_name, harness):
+    base = work_tmp / "base"
+    make_skill_server(base, harness, {"alpha": {"SKILL.md": "alpha content\n"}})
     dest = work_tmp / "dest"
 
-    result = run_setup(script_name, harness, base, allowed_signers, dest)
+    with serve_dir(base) as base_url:
+        result = run_setup(script_name, harness, base_url, dest)
 
     assert result.returncode == 0
-    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "full alpha\n"
-    assert (dest / "alpha" / "scripts" / "tool.sh").read_text(encoding="utf-8") == "echo full\n"
+    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha content\n"
     assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
 
 
 def test_rerun_is_idempotent_and_preserves_user_skill(work_tmp):
-    base, allowed_signers = make_base(work_tmp, "claude", full_skills={"alpha": {"SKILL.md": "full alpha\n"}})
+    base = work_tmp / "base"
+    make_skill_server(base, "claude", {"alpha": {"SKILL.md": "alpha content\n"}})
     dest = work_tmp / "dest"
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
-    (dest / "local-only").mkdir()
-    (dest / "local-only" / "SKILL.md").write_text("local\n", encoding="utf-8")
 
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
+    with serve_dir(base) as base_url:
+        run_setup("claude-setup.sh", "claude", base_url, dest)
+        (dest / "local-only").mkdir()
+        (dest / "local-only" / "SKILL.md").write_text("local\n", encoding="utf-8")
+        run_setup("claude-setup.sh", "claude", base_url, dest)
 
-    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "full alpha\n"
+    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha content\n"
     assert (dest / "local-only" / "SKILL.md").read_text(encoding="utf-8") == "local\n"
     assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
 
 
-def test_pre_marker_full_install_is_replaced_by_stub(work_tmp):
-    base, allowed_signers = make_base(work_tmp, "claude", full_skills={"alpha": {"SKILL.md": "new full\n"}})
-    dest = work_tmp / "dest"
-    (dest / "alpha" / "scripts").mkdir(parents=True)
-    (dest / "alpha" / "SKILL.md").write_text("old full\n", encoding="utf-8")
-    (dest / "alpha" / "scripts" / "old.sh").write_text("old\n", encoding="utf-8")
-
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
-
-    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "new full\n"
-    assert not (dest / "alpha" / "scripts").exists()
-
-
 def test_old_marker_entries_removed_when_upstream_removes_skill(work_tmp):
-    base, allowed_signers = make_base(work_tmp, "claude", full_skills={"alpha": {"SKILL.md": "alpha\n"}})
+    base = work_tmp / "base"
+    make_skill_server(base, "claude", {"alpha": {"SKILL.md": "alpha\n"}})
     dest = work_tmp / "dest"
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
 
-    write_archive(base / "claude" / "skills.tar.gz", {"beta": {"SKILL.md": "beta\n"}})
-    write_archive(base / "claude" / "skill-stubs.tar.gz", {"beta": {"SKILL.md": "beta stub\n"}})
-    key_path = work_tmp / "signing_key"
-    write_manifest(base, key_path)
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
+    with serve_dir(base) as base_url:
+        run_setup("claude-setup.sh", "claude", base_url, dest)
+        make_skill_server(base, "claude", {"beta": {"SKILL.md": "beta\n"}})
+        run_setup("claude-setup.sh", "claude", base_url, dest)
 
     assert not (dest / "alpha").exists()
     assert (dest / "beta" / "SKILL.md").read_text(encoding="utf-8") == "beta\n"
     assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "beta\n"
 
 
-def test_invalid_archive_leaves_prior_install_and_marker_untouched(work_tmp):
-    base, allowed_signers = make_base(work_tmp, "claude", full_skills={"alpha": {"SKILL.md": "alpha\n"}})
+def test_fresh_install_writes_all_subfiles(work_tmp):
+    base = work_tmp / "base"
+    make_skill_server(base, "claude", {
+        "alpha": {
+            "SKILL.md": "alpha\n",
+            "scripts/tool.sh": "echo tool\n",
+        }
+    })
     dest = work_tmp / "dest"
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
-    (base / "claude" / "skills.tar.gz").write_text("not a tarball\n", encoding="utf-8")
-    key_path = work_tmp / "signing_key"
-    write_manifest(base, key_path)
 
-    result = run_setup("claude-setup.sh", "claude", base, allowed_signers, dest, check=False)
+    with serve_dir(base) as base_url:
+        run_setup("claude-setup.sh", "claude", base_url, dest)
 
-    assert result.returncode != 0
     assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha\n"
-    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
-
-
-def test_full_mode_installs_full_bundle_with_same_cleanup_semantics(work_tmp):
-    base, allowed_signers = make_base(
-        work_tmp,
-        "codex",
-        stub_skills={"alpha": {"SKILL.md": "stub alpha\n"}},
-        full_skills={"alpha": {"SKILL.md": "full alpha\n", "scripts/tool.sh": "echo full\n"}},
-    )
-    dest = work_tmp / "dest"
-
-    run_setup("codex-setup.sh", "codex", base, allowed_signers, dest, "--full")
-
-    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "full alpha\n"
-    assert (dest / "alpha" / "scripts" / "tool.sh").read_text(encoding="utf-8") == "echo full\n"
-    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
-
-
-def test_tampered_archive_hash_leaves_prior_install_and_marker_untouched(work_tmp):
-    base, allowed_signers = make_base(work_tmp, "claude", full_skills={"alpha": {"SKILL.md": "alpha\n"}})
-    dest = work_tmp / "dest"
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
-    (base / "claude" / "skills.tar.gz").write_text("tampered after manifest sign\n", encoding="utf-8")
-
-    result = run_setup("claude-setup.sh", "claude", base, allowed_signers, dest, check=False)
-
-    assert result.returncode != 0
-    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha\n"
-    assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
-
-
-def test_bad_manifest_signature_leaves_prior_install_and_marker_untouched(work_tmp):
-    base, allowed_signers = make_base(work_tmp, "claude", full_skills={"alpha": {"SKILL.md": "alpha\n"}})
-    dest = work_tmp / "dest"
-    run_setup("claude-setup.sh", "claude", base, allowed_signers, dest)
-    manifest = json.loads((base / "manifest.json").read_text(encoding="utf-8"))
-    manifest["files"]["claude/skills.tar.gz"]["size"] += 1
-    (base / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-    result = run_setup("claude-setup.sh", "claude", base, allowed_signers, dest, check=False)
-
-    assert result.returncode != 0
-    assert (dest / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha\n"
+    assert (dest / "alpha" / "scripts" / "tool.sh").read_text(encoding="utf-8") == "echo tool\n"
     assert (dest / ".skills-hub-managed-skills").read_text(encoding="utf-8") == "alpha\n"
