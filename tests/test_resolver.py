@@ -139,6 +139,34 @@ def test_resolver_downloads_verified_skill_files(work_tmp):
     assert skill_md.is_file()
     assert "Content." in skill_md.read_text(encoding="utf-8")
     assert (skill_md.parent / "ref" / "note.md").read_text(encoding="utf-8") == "reference\n"
+    assert (skill_md.parent / "skills_hub_allowed_signers").read_text(encoding="utf-8") == allowed.read_text(encoding="utf-8")
+    context = json.loads((skill_md.parent / ".skills-hub-context.json").read_text(encoding="utf-8"))
+    assert context["harness"] == "cowork"
+    assert context["skill"] == "alpha"
+    assert context["base_url"] == base_url
+    assert Path(context["allowed_signers_path"]).is_file()
+
+
+def test_resolver_materializes_skills_hub_runtime_files(work_tmp):
+    key, allowed = make_signing_material(work_tmp)
+    base = make_skill_server(
+        work_tmp / "base",
+        key,
+        skill_name="skills-hub",
+        files={
+            "SKILL.md": "# skills-hub\n",
+            "scripts/manage_cowork_skills.py": "# manager\n",
+            "scripts/skills_hub_verify.py": "# verifier\n",
+        },
+    )
+    cache = work_tmp / "cache"
+
+    with serve_dir(base) as base_url:
+        result = run_fetch(base_url, cache, allowed, "cowork", "skills-hub")
+    skill_md = Path(result.stdout.strip())
+
+    assert (skill_md.parent / "scripts" / "manage_cowork_skills.py").read_text(encoding="utf-8") == "# manager\n"
+    assert (skill_md.parent / "scripts" / "skills_hub_verify.py").read_text(encoding="utf-8") == "# verifier\n"
 
 
 def test_resolver_fails_for_unknown_skill(work_tmp):

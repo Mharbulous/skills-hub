@@ -12,9 +12,12 @@ description: >
 
 Manage Cowork-facing Skills-hub installs from the skills-hub repository.
 
-Use `scripts/manage_cowork_skills.py`. Treat this script as the only supported
-implementation path; do not zip Cowork packages manually and do not hotpatch
-AppData runtime folders unless the user explicitly asks for an emergency patch.
+Use `scripts/manage_cowork_skills.py` relative to the verified `SKILL.md`
+directory currently being read. In Cowork, this is normally the
+resolver-materialized cache directory printed by `skills-hub-fetch.py`, not the
+repo path. Treat the script as the only supported implementation path; do not
+zip Cowork packages manually and do not hotpatch AppData runtime folders unless
+the user explicitly asks for an emergency patch.
 
 ## Modes
 
@@ -23,7 +26,7 @@ AppData runtime folders unless the user explicitly asks for an emergency patch.
 Run inventory before install or update:
 
 ```bash
-python public/skills/skills-hub/scripts/manage_cowork_skills.py inventory
+python scripts/manage_cowork_skills.py inventory
 ```
 
 If Cowork's install root is unclear, pass `--install-root <path>` using the
@@ -35,13 +38,14 @@ orphan, and conflict entries with the evidence printed by the script.
 For missing Skills-hub skills, fetch the published verified package:
 
 ```bash
-python public/skills/skills-hub/scripts/manage_cowork_skills.py fetch-package <skill>
+python scripts/manage_cowork_skills.py fetch-package <skill>
 ```
 
 The script downloads `manifest.json`, verifies `manifest.json.sig`, verifies
 the `.skill` package's hash and size, and writes the package to the output
-folder. Present the package path to the user for Cowork import. Do not generate
-a local zip as a substitute.
+folder. Use `--json` when you need the verified package URL, SHA-256, and size.
+Present the package path to the user for Cowork import. Do not generate a local
+zip as a substitute.
 
 ### Update
 
@@ -56,12 +60,23 @@ Use after the user identifies a useful skill that is not yet in Skills-hub.
 Confirm the target skill name and source path first, then run:
 
 ```bash
-python public/skills/skills-hub/scripts/manage_cowork_skills.py assimilate --source <path> --name <skill-name> --license <license-or-unknown>
+python scripts/manage_cowork_skills.py assimilate --source <path> --name <skill-name> --license <license-or-unknown>
 ```
 
 Assimilation copies the full source skill into `public/skills/<name>` and
 records provenance. If the target name already exists, stop for a naming or
 merge discussion.
+
+In Cloud Cowork, prefer GitHub PR assimilation:
+
+```bash
+python scripts/manage_cowork_skills.py assimilate --source <path> --name <skill-name> --license <license-or-unknown> --github-pr
+```
+
+This requires `GITHUB_TOKEN` with contents write and pull requests write access.
+If the token is absent or the GitHub API rejects the request, stop and report
+the exact error. Do not sign or deploy from Cowork; PR merge triggers the signed
+publish workflow.
 
 After assimilation, build and test:
 

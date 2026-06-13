@@ -132,6 +132,19 @@ def resolve_skill(manifest: dict, harness: str, skill: str) -> tuple[str, list[s
     fail(f"skill {skill!r} not found in manifest")
 
 
+def write_context(cache_dir: Path, base_url: str, harness: str, skill: str, allowed_signers: Path) -> None:
+    cached_signers = cache_dir / "skills_hub_allowed_signers"
+    shutil.copy2(allowed_signers, cached_signers)
+    context = {
+        "harness": harness,
+        "skill": skill,
+        "base_url": base_url.rstrip("/"),
+        "original_stub_dir": str(Path(__file__).resolve().parent),
+        "allowed_signers_path": str(cached_signers),
+    }
+    (cache_dir / ".skills-hub-context.json").write_text(json.dumps(context, indent=2) + "\n", encoding="utf-8")
+
+
 def materialize(base_url: str, harness: str, skill: str, cache_root: Path, allowed_signers: Path) -> Path:
     base_url = base_url.rstrip("/")
     cache_dir = cache_root / harness / skill
@@ -150,6 +163,7 @@ def materialize(base_url: str, harness: str, skill: str, cache_root: Path, allow
             dest = cache_dir / rel_path
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(content)
+        write_context(cache_dir, base_url, harness, skill, allowed_signers)
 
     except (OSError, RuntimeError, urllib.error.URLError) as exc:
         fail(f"could not fetch verified skill {skill!r}: {exc}")

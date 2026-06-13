@@ -158,3 +158,12 @@ def test_cowork_package_contains_stub_and_fetcher(tmp_public):
     assert names == {"alpha/SKILL.md", "alpha/skills-hub-fetch.py", "alpha/skills_hub_allowed_signers"}
     assert "Skills-hub Verified Resolver Stub" in skill_md
     assert "description: Alpha trigger" in skill_md
+
+
+def test_skills_hub_skill_files_include_runtime_verifier():
+    module = load_build_module(ROOT / "public")
+
+    files = module.skill_files(ROOT / "public" / "skills" / "skills-hub")
+
+    assert "scripts/manage_cowork_skills.py" in files
+    assert "scripts/skills_hub_verify.py" in files
