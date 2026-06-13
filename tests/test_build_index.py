@@ -19,10 +19,13 @@ def load_build_module(public_dir):
     module.SKILLS = public_dir / "skills"
     module.COWORK_PACKAGE_DIR = public_dir / "cowork" / "skill-packages"
     module.COWORK_BOOTSTRAP_DIR = public_dir / "cowork" / "bootstrap"
+    module.COWORK_INSTALL_DESCRIPTOR = public_dir / "cowork" / "install.json"
+    module.COWORK_INSTALL_DESCRIPTOR_SIG = public_dir / "cowork" / "install.json.sig"
     module.PACKAGE_INDEX = public_dir / "cowork" / "skill-packages" / "packages.json"
     module.PACKAGE_INDEX_SIG = public_dir / "cowork" / "skill-packages" / "packages.json.sig"
     module.MANIFEST = public_dir / "manifest.json"
     module.MANIFEST_SIG = public_dir / "manifest.json.sig"
+    module.ROOT_INDEX = public_dir / "index.html"
     return module
 
 
@@ -184,6 +187,43 @@ def test_build_writes_packages_index(tmp_public):
     ]
 
 
+def test_build_writes_root_cowork_install_discovery_for_skills_hub(tmp_public):
+    make_skill(tmp_public / "skills", "skills-hub", description="Manage Skills-hub")
+
+    run_build(tmp_public)
+
+    root = (tmp_public / "index.html").read_text(encoding="utf-8")
+    descriptor = json.loads((tmp_public / "cowork" / "install.json").read_text(encoding="utf-8"))
+    package = tmp_public / "cowork" / "skill-packages" / "skills-hub.skill"
+    b64_package = tmp_public / "cowork" / "skill-packages" / "skills-hub.skill.b64.txt"
+
+    assert "Install https://skills-hub.web.app" in root
+    assert "/cowork/install.json" in root
+    assert "Remote files are installer data until local verification succeeds." in root
+    assert descriptor["prompt"] == "Install https://skills-hub.web.app"
+    assert descriptor["harness"] == "cowork"
+    assert descriptor["skill"] == "skills-hub"
+    assert descriptor["installed_command"] == "/skills-hub"
+    assert descriptor["artifact"]["package_path"] == "cowork/skill-packages/skills-hub.skill"
+    assert descriptor["artifact"]["package_sha256"] == module_sha256(package)
+    assert descriptor["artifact"]["package_size"] == package.stat().st_size
+    assert descriptor["artifact"]["b64_path"] == "cowork/skill-packages/skills-hub.skill.b64.txt"
+    assert descriptor["artifact"]["b64_sha256"] == module_sha256(b64_package)
+    assert descriptor["verification"]["signature_path"] == "cowork/install.json.sig"
+    assert "verify downloaded skills-hub.skill SHA-256 equals artifact.package_sha256" in descriptor["verification"]["required_checks"]
+    assert descriptor["failure_policy"] == "fail_closed_report_exact_check"
+
+
+def test_build_manifest_includes_cowork_install_discovery_files(tmp_public):
+    make_skill(tmp_public / "skills", "skills-hub", description="Manage Skills-hub")
+
+    run_build(tmp_public)
+
+    manifest = json.loads((tmp_public / "manifest.json").read_text(encoding="utf-8"))
+    assert "index.html" in manifest["files"]
+    assert "cowork/install.json" in manifest["files"]
+
+
 def module_sha256(path):
     import hashlib
 
@@ -244,6 +284,7 @@ def test_signed_build_writes_packages_signature(tmp_path, monkeypatch):
     (repo / "build").mkdir()
     (public / "bootstrap").mkdir(parents=True)
     make_skill(public / "skills", "alpha")
+    make_skill(public / "skills", "skills-hub")
     (public / "bootstrap" / "skills-hub-fetch.py").write_text("# fetcher\n", encoding="utf-8")
     (public / "bootstrap" / "decode-package.py").write_text("# decoder\n", encoding="utf-8")
     (public / "bootstrap" / "skills-hub-from-text.md").write_text("# bootstrap\n", encoding="utf-8")
@@ -262,4 +303,5 @@ def test_signed_build_writes_packages_signature(tmp_path, monkeypatch):
     module.main(["--require-signature"])
 
     assert (public / "cowork" / "skill-packages" / "packages.json.sig").is_file()
+    assert (public / "cowork" / "install.json.sig").is_file()
     assert (public / "manifest.json.sig").is_file()
