@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
+import hashlib
 import importlib.util
 import json
 import os
@@ -22,6 +24,7 @@ from pathlib import Path
 BASE_URL = "https://skills-hub.web.app"
 DEFAULT_GITHUB_REPO = "Mharbulous/skills-hub"
 CONTEXT_FILE = ".skills-hub-context.json"
+PACKAGES_SCHEMA_VERSION = 1
 STALE_MARKERS = [
     "Myskillium Verified Resolver Stub",
     "myskillium-fetch.py",
@@ -59,6 +62,16 @@ class FetchResult:
     skill: str
     package_path: str
     package_url: str
+    sha256: str
+    size: int
+
+
+@dataclass
+class DecodeResult:
+    skill: str
+    package_path: str
+    package_url: str
+    b64_url: str
     sha256: str
     size: int
 
@@ -150,11 +163,20 @@ def load_catalog(
     *,
     index_path: Path | None = None,
     manifest_path: Path | None = None,
+    signature_path: Path | None = None,
     base_url: str | None = None,
     allowed_signers: Path | None = None,
     verifier=None,
 ) -> dict:
     if manifest_path:
+        if signature_path:
+            if verifier is None or allowed_signers is None:
+                fail("--signature requires manifest verifier and allowed signers")
+            try:
+                verifier.verify_signature(manifest_path, signature_path, allowed_signers)
+                return verifier.load_manifest(manifest_path)
+            except verifier.VerificationError as exc:
+                fail(str(exc))
         return json.loads(manifest_path.read_text(encoding="utf-8"))
     if index_path:
         return json.loads(index_path.read_text(encoding="utf-8"))
@@ -257,12 +279,13 @@ def cmd_inventory(args) -> None:
     base_url = args.base_url or context.get("base_url") or BASE_URL
     verifier = None
     allowed_signers = None
-    if not args.index and not args.manifest:
+    if args.signature or (not args.index and not args.manifest):
         verifier = load_verifier()
         allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
     catalog = load_catalog(
         index_path=args.index,
         manifest_path=args.manifest,
+        signature_path=args.signature,
         base_url=base_url,
         allowed_signers=allowed_signers,
         verifier=verifier,
@@ -320,6 +343,115 @@ def cmd_fetch_package(args) -> None:
         print(json.dumps(asdict(result), indent=2))
     else:
         print(package)
+
+
+def parse_timestamp(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        fail(f"invalid packages generated_at timestamp: {value!r}")
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def load_packages_index(path: Path) -> dict:
+    try:
+        packages = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        fail(f"could not read packages JSON: {exc}")
+    if packages.get("schema_version") != PACKAGES_SCHEMA_VERSION:
+        fail(f"unsupported packages schema_version {packages.get('schema_version')!r}")
+    generated_at = parse_timestamp(str(packages.get("generated_at", "")))
+    max_age = int(packages.get("max_age_seconds", 0))
+    if max_age <= 0:
+        fail("packages max_age_seconds must be positive")
+    age = (datetime.now(timezone.utc) - generated_at.astimezone(timezone.utc)).total_seconds()
+    if age > max_age:
+        fail("packages index is expired")
+    return packages
+
+
+def package_index_entry(packages: dict, skill: str) -> dict:
+    for entry in packages.get("packages", []):
+        if entry.get("name") == skill:
+            return entry
+    fail(f"skill {skill!r} not found in packages index")
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def decode_base64_file(path: Path) -> bytes:
+    try:
+        return base64.b64decode(path.read_text(encoding="ascii").encode("ascii"), validate=False)
+    except (OSError, UnicodeDecodeError, binascii.Error) as exc:
+        fail(f"could not decode base64 package text: {exc}")
+
+
+def decode_package_from_text(
+    *,
+    skill: str,
+    packages_path: Path,
+    signature_path: Path,
+    allowed_signers: Path,
+    b64_path: Path,
+    output_dir: Path,
+    verifier,
+) -> DecodeResult:
+    try:
+        verifier.verify_signature(packages_path, signature_path, allowed_signers)
+        packages = load_packages_index(packages_path)
+    except verifier.VerificationError as exc:
+        fail(str(exc))
+    entry = package_index_entry(packages, skill)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    package = output_dir / f"{skill}.skill"
+    data = decode_base64_file(b64_path)
+    try:
+        package.write_bytes(data)
+        expected_size = int(entry.get("size", -1))
+        if len(data) != expected_size:
+            fail(f"size mismatch for {skill}.skill: expected {expected_size}, got {len(data)}")
+        actual_sha = sha256_bytes(data)
+        expected_sha = str(entry.get("sha256", ""))
+        if actual_sha != expected_sha:
+            fail(f"sha256 mismatch for {skill}.skill")
+    except SystemExit:
+        try:
+            package.unlink()
+        except OSError:
+            pass
+        raise
+    base_url = str(packages.get("base_url") or BASE_URL).rstrip("/")
+    return DecodeResult(
+        skill=skill,
+        package_path=str(package),
+        package_url=f"{base_url}/{entry['skill_path']}",
+        b64_url=f"{base_url}/{entry['b64_path']}",
+        sha256=str(entry["sha256"]),
+        size=int(entry["size"]),
+    )
+
+
+def cmd_decode_package(args) -> None:
+    context = read_context()
+    verifier = load_verifier()
+    allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
+    result = decode_package_from_text(
+        skill=args.skill,
+        packages_path=args.packages,
+        signature_path=args.signature,
+        allowed_signers=allowed_signers,
+        b64_path=args.b64,
+        output_dir=args.output_dir,
+        verifier=verifier,
+    )
+    if args.json:
+        print(json.dumps(asdict(result), indent=2))
+    else:
+        print(result.package_path)
 
 
 def should_copy(path: Path, source_root: Path) -> bool:
@@ -492,6 +624,7 @@ def main() -> None:
     inventory.add_argument("--install-root", action="append", default=[])
     inventory.add_argument("--index", type=Path)
     inventory.add_argument("--manifest", type=Path)
+    inventory.add_argument("--signature", type=Path)
     inventory.add_argument("--base-url")
     inventory.add_argument("--allowed-signers", type=Path)
     inventory.add_argument("--json", action="store_true")
@@ -504,6 +637,16 @@ def main() -> None:
     fetch_package.add_argument("--allowed-signers", type=Path)
     fetch_package.add_argument("--json", action="store_true")
     fetch_package.set_defaults(func=cmd_fetch_package)
+
+    decode_package = sub.add_parser("decode-package")
+    decode_package.add_argument("skill")
+    decode_package.add_argument("--packages", type=Path, required=True)
+    decode_package.add_argument("--signature", type=Path, required=True)
+    decode_package.add_argument("--allowed-signers", type=Path)
+    decode_package.add_argument("--b64", type=Path, required=True)
+    decode_package.add_argument("--output-dir", type=Path, default=Path("outputs") / "skills-hub-packages")
+    decode_package.add_argument("--json", action="store_true")
+    decode_package.set_defaults(func=cmd_decode_package)
 
     assimilate = sub.add_parser("assimilate")
     assimilate.add_argument("--source", type=Path, required=True)

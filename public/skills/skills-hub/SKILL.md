@@ -47,12 +47,23 @@ folder. Use `--json` when you need the verified package URL, SHA-256, and size.
 Present the package path to the user for Cowork import. Do not generate a local
 zip as a substitute.
 
+If Cowork's shell network path cannot reach `skills-hub.web.app`, use the
+restricted text workflow instead:
+
+```text
+https://skills-hub.web.app/cowork/bootstrap/skills-hub-from-text.md
+```
+
+That page is the source of truth for fetching text artifacts, running
+`decode-package`, and presenting the reconstructed `.skill` package.
+
 ### Update
 
 Run inventory, show stale wrappers, and confirm each target with the user. For
 each confirmed skill, run `fetch-package <skill>` and present the verified
-package for Cowork import. Re-run inventory after import if the user wants a
-check.
+package for Cowork import. In restricted Cowork, follow the text workflow above
+for each confirmed skill and substitute that skill's `.skill.b64.txt` file.
+Re-run inventory after import if the user wants a check.
 
 ### Assimilate
 

@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import http.server
 import importlib.util
@@ -89,6 +90,28 @@ def write_signed_manifest(base_dir, key, *, skills=None, files=None):
     return manifest
 
 
+def write_signed_packages(base_dir, key, package_data=b"package"):
+    package_index = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "max_age_seconds": 3600,
+        "base_url": "https://skills-hub.web.app",
+        "packages": [
+            {
+                "name": "alpha",
+                "skill_path": "cowork/skill-packages/alpha.skill",
+                "b64_path": "cowork/skill-packages/alpha.skill.b64.txt",
+                "sha256": sha256_bytes(package_data),
+                "size": len(package_data),
+            }
+        ],
+    }
+    packages_path = base_dir / "packages.json"
+    packages_path.write_text(json.dumps(package_index, indent=2), encoding="utf-8")
+    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(packages_path)], check=True)
+    return packages_path, base_dir / "packages.json.sig"
+
+
 def test_inventory_classifies_missing_stale_orphan_and_current(tmp_path):
     manager = load_manager()
     catalog = {
@@ -132,6 +155,7 @@ def test_inventory_command_uses_explicit_manifest_without_repo_root(tmp_path, mo
             install_root=[str(tmp_path)],
             index=None,
             manifest=manifest,
+            signature=None,
             base_url=None,
             allowed_signers=None,
             json=True,
@@ -166,6 +190,7 @@ def test_inventory_uses_verified_remote_manifest_without_repo_root(tmp_path, mon
                 install_root=[str(tmp_path)],
                 index=None,
                 manifest=None,
+                signature=None,
                 base_url=base_url,
                 allowed_signers=allowed,
                 json=True,
@@ -190,7 +215,75 @@ def test_inventory_rejects_tampered_remote_manifest(tmp_path):
                 install_root=[str(tmp_path)],
                 index=None,
                 manifest=None,
+                signature=None,
                 base_url=base_url,
+                allowed_signers=allowed,
+                json=True,
+            )
+        )
+
+
+def test_inventory_command_verifies_explicit_manifest_when_signature_supplied(tmp_path, capsys):
+    manager = load_manager()
+    key, allowed = make_signing_material(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "max_age_seconds": 3600,
+                "skills": [{"name": "alpha"}],
+                "files": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(manifest)], check=True)
+    make_installed(tmp_path, "alpha", "Skills-hub Verified Resolver Stub\npython skills-hub-fetch.py cowork alpha\n")
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(tmp_path)],
+            index=None,
+            manifest=manifest,
+            signature=tmp_path / "manifest.json.sig",
+            base_url=None,
+            allowed_signers=allowed,
+            json=True,
+        )
+    )
+
+    assert json.loads(capsys.readouterr().out)[0]["status"] == "current"
+
+
+def test_inventory_command_rejects_tampered_explicit_manifest_when_signature_supplied(tmp_path):
+    manager = load_manager()
+    key, allowed = make_signing_material(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "max_age_seconds": 3600,
+                "skills": [{"name": "alpha"}],
+                "files": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(manifest)], check=True)
+    manifest.write_text(json.dumps({"schema_version": 3, "skills": []}), encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        manager.cmd_inventory(
+            SimpleNamespace(
+                install_root=[str(tmp_path)],
+                index=None,
+                manifest=manifest,
+                signature=tmp_path / "manifest.json.sig",
+                base_url=None,
                 allowed_signers=allowed,
                 json=True,
             )
@@ -231,6 +324,31 @@ def test_fetch_package_json_works_without_repo_root(tmp_path, monkeypatch, capsy
     assert result["package_url"].endswith(package_rel)
     assert result["sha256"] == sha256_bytes(b"package")
     assert result["size"] == len(b"package")
+
+
+def test_decode_package_json_works_from_text_artifacts(tmp_path, capsys):
+    manager = load_manager()
+    key, allowed = make_signing_material(tmp_path)
+    packages, signature = write_signed_packages(tmp_path, key, b"package")
+    b64 = tmp_path / "alpha.skill.b64.txt"
+    b64.write_text("\r\n".join(base64.b64encode(b"package").decode("ascii")), encoding="ascii")
+
+    manager.cmd_decode_package(
+        SimpleNamespace(
+            skill="alpha",
+            packages=packages,
+            signature=signature,
+            output_dir=tmp_path / "out",
+            allowed_signers=allowed,
+            b64=b64,
+            json=True,
+        )
+    )
+
+    result = json.loads(capsys.readouterr().out)
+    assert Path(result["package_path"]).read_bytes() == b"package"
+    assert result["package_url"] == "https://skills-hub.web.app/cowork/skill-packages/alpha.skill"
+    assert result["b64_url"] == "https://skills-hub.web.app/cowork/skill-packages/alpha.skill.b64.txt"
 
 
 def test_assimilate_writes_source_and_provenance(tmp_path, monkeypatch):

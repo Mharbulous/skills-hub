@@ -13,6 +13,7 @@ Writes  public/<harness>/skills/<name>/          override-merged skill dirs
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -21,6 +22,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import textwrap
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,14 +39,19 @@ BASE_URL = "https://skills-hub.web.app"
 HARNESSES = ["claude", "codex", "cowork"]
 INDEX_SCHEMA_VERSION = 1
 MANIFEST_SCHEMA_VERSION = 3
+PACKAGES_SCHEMA_VERSION = 1
 MANIFEST_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 SIGNING_NAMESPACE = "skills-hub-manifest"
 COWORK_TEMPLATE = ROOT / "build" / "cowork_wrapper_template.md"
 COWORK_PACKAGE_DIR = PUBLIC / "cowork" / "skill-packages"
+COWORK_BOOTSTRAP_DIR = PUBLIC / "cowork" / "bootstrap"
+PACKAGE_INDEX = COWORK_PACKAGE_DIR / "packages.json"
+PACKAGE_INDEX_SIG = COWORK_PACKAGE_DIR / "packages.json.sig"
 MANIFEST = PUBLIC / "manifest.json"
 MANIFEST_SIG = PUBLIC / "manifest.json.sig"
 IGNORED_PARTS = {"overrides", "__pycache__"}
 IGNORED_SUFFIXES = {".pyc", ".pyo"}
+BOOTSTRAP_FILES = ["decode-package.py", "skills-hub-from-text.md"]
 
 
 def split_frontmatter(text):
@@ -150,7 +157,23 @@ def write_cowork_package(skill_dir):
         zf.write(fetcher, f"{skill_dir.name}/skills-hub-fetch.py")
         if allowed_signers.is_file():
             zf.write(allowed_signers, f"{skill_dir.name}/skills_hub_allowed_signers")
+    encoded = base64.b64encode(package_path.read_bytes()).decode("ascii")
+    (package_path.with_name(package_path.name + ".b64.txt")).write_text(
+        "\n".join(textwrap.wrap(encoded, 76)) + "\n",
+        encoding="ascii",
+    )
     return package_path
+
+
+def write_cowork_bootstrap():
+    if COWORK_BOOTSTRAP_DIR.exists():
+        remove_tree(COWORK_BOOTSTRAP_DIR)
+    COWORK_BOOTSTRAP_DIR.mkdir(parents=True, exist_ok=True)
+    for filename in BOOTSTRAP_FILES:
+        source = PUBLIC / "bootstrap" / filename
+        if not source.is_file():
+            sys.exit(f"No Cowork bootstrap file at {source}")
+        shutil.copy2(source, COWORK_BOOTSTRAP_DIR / filename)
 
 
 def build_catalog(skill_dirs):
@@ -214,6 +237,27 @@ def build_manifest(catalog, generated_at):
     }
 
 
+def build_package_index(generated_at):
+    packages = []
+    for package in sorted(COWORK_PACKAGE_DIR.glob("*.skill")):
+        packages.append(
+            {
+                "name": package.stem,
+                "skill_path": package.relative_to(PUBLIC).as_posix(),
+                "b64_path": package.with_name(package.name + ".b64.txt").relative_to(PUBLIC).as_posix(),
+                "sha256": sha256_file(package),
+                "size": package.stat().st_size,
+            }
+        )
+    return {
+        "schema_version": PACKAGES_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "max_age_seconds": MANIFEST_MAX_AGE_SECONDS,
+        "base_url": BASE_URL,
+        "packages": packages,
+    }
+
+
 def signing_key_from_env():
     value = os.environ.get("SKILLS_HUB_SIGNING_KEY")
     if not value:
@@ -272,14 +316,14 @@ def ensure_public_allowed_signers(require_signature):
         sys.exit("skills_hub_allowed_signers or SKILLS_HUB_SIGNING_KEY is required for signed build")
 
 
-def sign_manifest(require_signature):
+def sign_artifact(path, signature_path, require_signature):
     key_path, temp_key = signing_key_from_env()
-    if MANIFEST_SIG.exists():
-        MANIFEST_SIG.unlink()
+    if signature_path.exists():
+        signature_path.unlink()
     try:
         if not key_path:
             if require_signature:
-                sys.exit("SKILLS_HUB_SIGNING_KEY is required to sign manifest.json")
+                sys.exit(f"SKILLS_HUB_SIGNING_KEY is required to sign {path.name}")
             return False
         public_allowed = PUBLIC / "bootstrap" / "skills_hub_allowed_signers"
         public_key = subprocess.run(
@@ -299,15 +343,15 @@ def sign_manifest(require_signature):
                 str(key_path),
                 "-n",
                 SIGNING_NAMESPACE,
-                str(MANIFEST),
+                str(path),
             ],
             check=True,
         )
-        generated = MANIFEST.with_name(MANIFEST.name + ".sig")
-        if generated != MANIFEST_SIG and generated.exists():
-            generated.replace(MANIFEST_SIG)
-        if not MANIFEST_SIG.is_file():
-            sys.exit("ssh-keygen did not produce manifest.json.sig")
+        generated = path.with_name(path.name + ".sig")
+        if generated != signature_path and generated.exists():
+            generated.replace(signature_path)
+        if not signature_path.is_file():
+            sys.exit(f"ssh-keygen did not produce {signature_path.name}")
         return True
     finally:
         if temp_key:
@@ -315,6 +359,10 @@ def sign_manifest(require_signature):
                 temp_key.unlink()
             except OSError:
                 pass
+
+
+def sign_manifest(require_signature):
+    return sign_artifact(MANIFEST, MANIFEST_SIG, require_signature)
 
 
 def main(argv=None):
@@ -334,6 +382,12 @@ def main(argv=None):
     skill_dirs = sorted(d for d in SKILLS.iterdir() if (d / "SKILL.md").is_file())
     catalog = build_catalog(skill_dirs)
     generated_at = datetime.now(timezone.utc).isoformat()
+    write_cowork_bootstrap()
+    PACKAGE_INDEX.write_text(
+        json.dumps(build_package_index(generated_at), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    packages_signed = sign_artifact(PACKAGE_INDEX, PACKAGE_INDEX_SIG, args.require_signature)
     index = {
         "schema_version": INDEX_SCHEMA_VERSION,
         "generated_at": generated_at,
@@ -349,7 +403,7 @@ def main(argv=None):
         encoding="utf-8",
     )
     signed = sign_manifest(args.require_signature)
-    suffix = "signed" if signed else "unsigned"
+    suffix = "signed" if signed and packages_signed else "unsigned"
     print(f"Built index and {suffix} manifest for {len(skill_dirs)} skills -> {PUBLIC}")
 
 

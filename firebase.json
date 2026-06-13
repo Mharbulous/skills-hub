@@ -12,6 +12,30 @@
         ]
       },
       {
+        "source": "**/*.skill.b64.txt",
+        "headers": [
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+        ]
+      },
+      {
+        "source": "**/*.sig",
+        "headers": [
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+        ]
+      },
+      {
+        "source": "bootstrap/skills_hub_allowed_signers",
+        "headers": [
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+        ]
+      },
+      {
+        "source": "cowork/bootstrap/**",
+        "headers": [
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+        ]
+      },
+      {
         "source": "**",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache" },
