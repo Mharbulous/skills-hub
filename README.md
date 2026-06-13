@@ -103,6 +103,9 @@ Stable skill URLs:
 /{harness}/skill-stubs.tar.gz
 /{harness}/managed-skills.txt
 /cowork/skill-packages/<skill>.skill
+/cowork/skill-packages/<skill>.skill.b64.txt
+/cowork/skill-packages/packages.json
+/cowork/skill-packages/packages.json.sig
 /cowork/install.json
 /cowork/install.json.sig
 /index.json
@@ -187,11 +190,12 @@ Run locally:
 python build/build_index.py
 ```
 
-For a manual signed deploy, build, sign, stage, then deploy:
+For a manual signed deploy, use the same all-artifacts signing path as CI,
+then deploy:
 
-```bash
-python build/build_index.py
-ssh-keygen -Y sign -f C:\Users\Brahm\skills-hub-signing-key\skills_hub_manifest_ed25519 -n skills-hub-manifest public/manifest.json
+```powershell
+$env:SKILLS_HUB_SIGNING_KEY = "C:\Users\Brahm\skills-hub-signing-key\skills_hub_manifest_ed25519"
+python build\build_index.py --require-signature
 npx.cmd firebase-tools deploy --only hosting --project skills-hub
 ```
 

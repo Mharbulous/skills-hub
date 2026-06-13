@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Generate public/index.json, Cowork packages, and signed-manifest inputs.
+"""Generate public/index.json, Cowork packages, and signed artifact inputs.
 
 Reads   public/skills/<name>/SKILL.md            canonical definition
         public/skills/<name>/overrides/<h>.md    optional per-harness override
 Writes  public/<harness>/skills/<name>/          override-merged skill dirs
         public/cowork/skill-packages/<name>.skill
         public/index.json
+        public/cowork/skill-packages/packages.json(.sig)
+        public/cowork/install.json(.sig)
         public/manifest.json
-        public/manifest.json.sig                 when SKILLS_HUB_SIGNING_KEY is set
+        public/manifest.json.sig                 when signing is enabled
 """
 
 from __future__ import annotations
