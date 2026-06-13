@@ -321,6 +321,18 @@ def test_skill_editing_docs_do_not_use_coclerk_distribution_paths():
         assert needle not in text
 
 
+def test_manual_cowork_acceptance_matches_descriptor_install_contract():
+    text = (ROOT / "tests" / "manual_cowork_install_acceptance.md").read_text(encoding="utf-8")
+
+    assert "Current Supported Test" in text
+    assert "signed descriptor prompt from `README.md`" in text
+    assert "artifact.b64_url" in text
+    assert "artifact.b64_size" in text
+    assert "artifact.b64_sha256" in text
+    assert "Future Exact-Prompt Acceptance" in text
+    assert "registry-only plugin installer" in text
+
+
 def test_signed_build_writes_packages_signature(tmp_path, monkeypatch):
     if shutil.which("ssh-keygen") is None:
         pytest.skip("ssh-keygen not available")
