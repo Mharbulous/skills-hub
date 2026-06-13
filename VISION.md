@@ -108,7 +108,7 @@ skill folders and no dependency on Coclerk-local packaging.
 - Firebase Hosting remains a static transport; integrity comes from signed
   manifests and local trust anchors, not from obscurity or domain trust alone.
 - `skills/` is the canonical source tree for skill definitions in this repo.
-- `dist/` is the generated artifact contract for harness consumers.
+- `public/` is the generated artifact contract for harness consumers.
 - Cowork needs importable wrapper artifacts generated from skills-hub output,
   not packages produced by Coclerk.
 - Claude and Codex should read verified full local installs before skill

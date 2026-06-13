@@ -246,12 +246,14 @@ def test_text_bootstrap_doc_references_required_artifacts():
     assert "https://skills-hub.web.app/bootstrap/skills_hub_allowed_signers" in text
     assert "https://skills-hub.web.app/cowork/skill-packages/packages.json" in text
     assert "https://skills-hub.web.app/cowork/skill-packages/packages.json.sig" in text
+    assert "https://skills-hub.web.app/cowork/skill-packages/<skill>.skill.b64.txt" in text
+    assert "python decode-package.py --skill <skill>" in text
     assert "https://skills-hub.web.app/cowork/skill-packages/skills-hub.skill.b64.txt" in text
     assert "https://skills-hub.web.app/cowork/bootstrap/decode-package.py" in text
 
 
 def test_cowork_package_contains_stub_and_fetcher(tmp_public):
-    make_skill(tmp_public / "skills", "alpha", description="Alpha trigger")
+    make_skill(tmp_public / "skills", "alpha", description="Alpha trigger", body="Canonical alpha body.\n")
 
     run_build(tmp_public)
 
@@ -264,6 +266,19 @@ def test_cowork_package_contains_stub_and_fetcher(tmp_public):
     assert names == {"alpha/SKILL.md", "alpha/skills-hub-fetch.py", "alpha/skills_hub_allowed_signers"}
     assert "Skills-hub Verified Resolver Stub" in skill_md
     assert "description: Alpha trigger" in skill_md
+    assert "Canonical alpha body." not in skill_md
+
+
+def test_skills_hub_skill_advertises_only_v1_control_panel_verbs():
+    text = (ROOT / "public" / "skills" / "skills-hub" / "SKILL.md").read_text(encoding="utf-8")
+    frontmatter = text.split("---", 2)[1]
+
+    assert "/skills-hub inventory" in text
+    assert "/skills-hub install <skill>" in text
+    assert "/skills-hub update <skill>" in text
+    assert "/skills-hub update all" in text
+    assert "assimilate" not in frontmatter.lower()
+    assert "assimilate" not in text.lower()
 
 
 def test_skills_hub_skill_files_include_runtime_verifier():

@@ -209,15 +209,16 @@ def test_inventory_uses_verified_remote_manifest_without_repo_root(tmp_path, mon
     assert rows[0]["status"] == "current"
 
 
-def test_inventory_rejects_tampered_remote_manifest(tmp_path):
+def test_inventory_degrades_when_remote_manifest_signature_fails(tmp_path, capsys):
     manager = load_manager()
     key, allowed = make_signing_material(tmp_path)
     base = tmp_path / "base"
     base.mkdir()
     write_signed_manifest(base, key, skills=[{"name": "alpha"}])
     (base / "manifest.json").write_text(json.dumps({"schema_version": 3, "skills": []}), encoding="utf-8")
+    make_installed(tmp_path, "alpha", "Skills-hub Verified Resolver Stub\npython skills-hub-fetch.py cowork alpha\n")
 
-    with serve_dir(base) as base_url, pytest.raises(SystemExit):
+    with serve_dir(base) as base_url:
         manager.cmd_inventory(
             SimpleNamespace(
                 install_root=[str(tmp_path)],
@@ -229,6 +230,74 @@ def test_inventory_rejects_tampered_remote_manifest(tmp_path):
                 json=True,
             )
         )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["catalog"]["status"] == "blocked"
+    assert "manifest signature verification failed" in output["catalog"]["error"]
+    assert output["installed"] == [
+        {
+            "name": "alpha",
+            "local_status": "skills-hub-wrapper",
+            "evidence": "local Skills-hub resolver wrapper markers found",
+            "path": str(tmp_path / "plugin" / "session" / "skills" / "alpha" / "SKILL.md"),
+        }
+    ]
+
+
+def test_inventory_degrades_when_remote_manifest_unreachable(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    _, allowed = make_signing_material(tmp_path)
+    make_installed(tmp_path, "alpha", "Myskillium Verified Resolver Stub\npython myskillium-fetch.py cowork alpha\n")
+
+    def blocked_fetch(url):
+        raise manager.urllib.error.URLError("network blocked")
+
+    monkeypatch.setattr(manager, "fetch_bytes", blocked_fetch)
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(tmp_path)],
+            index=None,
+            manifest=None,
+            signature=None,
+            base_url="https://skills-hub.example.invalid",
+            allowed_signers=allowed,
+            json=True,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["catalog"]["status"] == "blocked"
+    assert "could not download signed manifest" in output["catalog"]["error"]
+    assert output["installed"][0]["local_status"] == "stale-wrapper-marker"
+    assert {row.get("status") for row in output["installed"]} == {None}
+
+
+def test_inventory_degrades_with_empty_installed_when_remote_blocked_and_no_install_root(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    _, allowed = make_signing_material(tmp_path)
+    monkeypatch.delenv("APPDATA", raising=False)
+
+    def blocked_fetch(url):
+        raise manager.urllib.error.URLError("network blocked")
+
+    monkeypatch.setattr(manager, "fetch_bytes", blocked_fetch)
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[],
+            index=None,
+            manifest=None,
+            signature=None,
+            base_url="https://skills-hub.example.invalid",
+            allowed_signers=allowed,
+            json=True,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["catalog"]["status"] == "blocked"
+    assert output["installed"] == []
 
 
 def test_inventory_command_verifies_explicit_manifest_when_signature_supplied(tmp_path, capsys):
@@ -265,7 +334,7 @@ def test_inventory_command_verifies_explicit_manifest_when_signature_supplied(tm
     assert json.loads(capsys.readouterr().out)[0]["status"] == "current"
 
 
-def test_inventory_command_rejects_tampered_explicit_manifest_when_signature_supplied(tmp_path):
+def test_inventory_command_degrades_when_explicit_manifest_signature_fails(tmp_path, capsys):
     manager = load_manager()
     key, allowed = make_signing_material(tmp_path)
     manifest = tmp_path / "manifest.json"
@@ -283,6 +352,32 @@ def test_inventory_command_rejects_tampered_explicit_manifest_when_signature_sup
     )
     subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(manifest)], check=True)
     manifest.write_text(json.dumps({"schema_version": 3, "skills": []}), encoding="utf-8")
+    make_installed(tmp_path, "alpha", "local skill\n")
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(tmp_path)],
+            index=None,
+            manifest=manifest,
+            signature=tmp_path / "manifest.json.sig",
+            base_url=None,
+            allowed_signers=allowed,
+            json=True,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["catalog"]["status"] == "blocked"
+    assert "manifest signature verification failed" in output["catalog"]["error"]
+    assert output["installed"][0]["local_status"] == "unrecognized"
+
+
+def test_inventory_command_keeps_malformed_manifest_as_hard_error(tmp_path):
+    manager = load_manager()
+    key, allowed = make_signing_material(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("not json", encoding="utf-8")
+    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(manifest)], check=True)
 
     with pytest.raises(SystemExit):
         manager.cmd_inventory(

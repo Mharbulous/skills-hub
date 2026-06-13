@@ -44,6 +44,10 @@ EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".skill"}
 EXCLUDED_NAMES = {"manifest.json", "manifest.json.sig"}
 
 
+class CatalogUnavailable(RuntimeError):
+    pass
+
+
 @dataclass
 class InstalledSkill:
     name: str
@@ -56,6 +60,14 @@ class InstalledSkill:
 class InventoryRow:
     name: str
     status: str
+    evidence: str
+    path: str = ""
+
+
+@dataclass
+class LocalInventoryRow:
+    name: str
+    local_status: str
     evidence: str
     path: str = ""
 
@@ -142,13 +154,25 @@ def fetch_bytes(url: str) -> bytes:
         return resp.read()
 
 
+def catalog_unavailable(message: str) -> None:
+    raise CatalogUnavailable(message)
+
+
+def is_freshness_verification_error(message: str) -> bool:
+    return (
+        message == "manifest is expired"
+        or message == "manifest max_age_seconds must be positive"
+        or message.startswith("invalid manifest generated_at timestamp:")
+    )
+
+
 def verified_remote_manifest(base_url: str, allowed_signers: Path, verifier) -> dict:
     base_url = base_url.rstrip("/")
     try:
         manifest_data = fetch_bytes(f"{base_url}/manifest.json")
         signature_data = fetch_bytes(f"{base_url}/manifest.json.sig")
     except (OSError, RuntimeError, urllib.error.URLError) as exc:
-        fail(f"could not download signed manifest from {base_url}: {exc}")
+        catalog_unavailable(f"could not download signed manifest from {base_url}: {exc}")
     with tempfile.TemporaryDirectory(prefix="skills-hub-manifest-") as tmp:
         tmp_path = Path(tmp)
         manifest_path = tmp_path / "manifest.json"
@@ -157,8 +181,13 @@ def verified_remote_manifest(base_url: str, allowed_signers: Path, verifier) -> 
         signature_path.write_bytes(signature_data)
         try:
             verifier.verify_signature(manifest_path, signature_path, allowed_signers)
+        except verifier.VerificationError as exc:
+            catalog_unavailable(str(exc))
+        try:
             return verifier.load_manifest(manifest_path)
         except verifier.VerificationError as exc:
+            if is_freshness_verification_error(str(exc)):
+                catalog_unavailable(str(exc))
             fail(str(exc))
 
 
@@ -177,8 +206,13 @@ def load_catalog(
                 fail("--signature requires manifest verifier and allowed signers")
             try:
                 verifier.verify_signature(manifest_path, signature_path, allowed_signers)
+            except verifier.VerificationError as exc:
+                catalog_unavailable(str(exc))
+            try:
                 return verifier.load_manifest(manifest_path)
             except verifier.VerificationError as exc:
+                if is_freshness_verification_error(str(exc)):
+                    catalog_unavailable(str(exc))
                 fail(str(exc))
         return json.loads(manifest_path.read_text(encoding="utf-8"))
     if index_path:
@@ -277,6 +311,68 @@ def print_inventory(rows: list[InventoryRow], as_json: bool) -> None:
         print(f"{row.status}\t{row.name}\t{row.evidence}{suffix}")
 
 
+def inventory_roots(args, context: dict) -> list[Path]:
+    roots = [Path(p) for p in args.install_root] if args.install_root else context_install_roots(context)
+    if not roots:
+        roots = default_install_roots()
+    return roots
+
+
+def classify_local_installed(name: str, installed: list[InstalledSkill]) -> LocalInventoryRow:
+    if len(installed) > 1:
+        return LocalInventoryRow(
+            name=name,
+            local_status="conflict",
+            evidence=f"multiple installed copies found ({len(installed)}); newest listed",
+            path=installed[0].skill_md,
+        )
+    item = installed[0]
+    text = Path(item.skill_md).read_text(encoding="utf-8", errors="replace")
+    lowered = text.lower()
+    if all(marker.lower() in lowered for marker in CURRENT_MARKERS):
+        return LocalInventoryRow(
+            name=name,
+            local_status="skills-hub-wrapper",
+            evidence="local Skills-hub resolver wrapper markers found",
+            path=item.skill_md,
+        )
+    if any(marker.lower() in lowered for marker in STALE_MARKERS):
+        return LocalInventoryRow(
+            name=name,
+            local_status="stale-wrapper-marker",
+            evidence="matched stale wrapper marker",
+            path=item.skill_md,
+        )
+    return LocalInventoryRow(
+        name=name,
+        local_status="unrecognized",
+        evidence="installed skill is not a recognized Skills-hub wrapper",
+        path=item.skill_md,
+    )
+
+
+def build_local_inventory(installed: dict[str, list[InstalledSkill]]) -> list[LocalInventoryRow]:
+    return [classify_local_installed(name, installed[name]) for name in sorted(installed)]
+
+
+def print_degraded_inventory(error: str, rows: list[LocalInventoryRow], as_json: bool) -> None:
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "catalog": {"status": "blocked", "error": error},
+                    "installed": [asdict(row) for row in rows],
+                },
+                indent=2,
+            )
+        )
+        return
+    print(f"catalog-blocked\t{error}")
+    for row in rows:
+        suffix = f" ({row.path})" if row.path else ""
+        print(f"{row.local_status}\t{row.name}\t{row.evidence}{suffix}")
+
+
 def cmd_inventory(args) -> None:
     context = read_context()
     base_url = args.base_url or context.get("base_url") or BASE_URL
@@ -285,17 +381,21 @@ def cmd_inventory(args) -> None:
     if args.signature or (not args.index and not args.manifest):
         verifier = load_verifier()
         allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
-    catalog = load_catalog(
-        index_path=args.index,
-        manifest_path=args.manifest,
-        signature_path=args.signature,
-        base_url=base_url,
-        allowed_signers=allowed_signers,
-        verifier=verifier,
-    )
-    roots = [Path(p) for p in args.install_root] if args.install_root else context_install_roots(context)
-    if not roots:
-        roots = default_install_roots()
+    try:
+        catalog = load_catalog(
+            index_path=args.index,
+            manifest_path=args.manifest,
+            signature_path=args.signature,
+            base_url=base_url,
+            allowed_signers=allowed_signers,
+            verifier=verifier,
+        )
+    except CatalogUnavailable as exc:
+        roots = inventory_roots(args, context)
+        installed = discover_installed(roots) if roots else {}
+        print_degraded_inventory(str(exc), build_local_inventory(installed), args.json)
+        return
+    roots = inventory_roots(args, context)
     if not roots:
         fail("could not find Cowork install root; rerun with --install-root <path>")
     rows = build_inventory(catalog, discover_installed(roots))
