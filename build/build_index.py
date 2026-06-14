@@ -8,6 +8,8 @@ Writes  public/<harness>/skills/<name>/          override-merged skill dirs
         public/index.json
         public/cowork/skill-packages/packages.json(.sig)
         public/cowork/install.json(.sig)
+        .claude-plugin/marketplace.json
+        plugins/skills-hub/
         public/manifest.json
         public/manifest.json.sig                 when signing is enabled
 """
@@ -689,9 +691,13 @@ def main(argv=None):
     has_cowork_plugin = write_cowork_plugin(skill_dirs)
     if has_cowork_plugin:
         write_cowork_marketplace()
+    elif COWORK_MARKETPLACE.exists():
+        COWORK_MARKETPLACE.unlink()
     has_root_plugin = write_root_plugin(skill_dirs)
     if has_root_plugin:
         write_root_marketplace()
+    elif ROOT_MARKETPLACE.exists():
+        ROOT_MARKETPLACE.unlink()
     package_index = build_package_index(generated_at)
     PACKAGE_INDEX.write_text(
         json.dumps(package_index, indent=2, ensure_ascii=False) + "\n",

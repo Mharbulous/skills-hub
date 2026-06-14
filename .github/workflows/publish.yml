@@ -22,6 +22,11 @@ jobs:
           SKILLS_HUB_SIGNING_KEY: ${{ secrets.SKILLS_HUB_SIGNING_KEY }}
         run: python3 build/build_index.py --require-signature
 
+      - name: Verify committed Cowork repository marketplace artifacts
+        run: |
+          git diff --exit-code -- .claude-plugin plugins
+          test -z "$(git status --porcelain -- .claude-plugin plugins)"
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

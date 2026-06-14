@@ -464,7 +464,8 @@ def test_manual_cowork_acceptance_matches_descriptor_install_contract():
     text = (ROOT / "tests" / "manual_cowork_install_acceptance.md").read_text(encoding="utf-8")
 
     assert "Current Supported Test" in text
-    assert "Install https://skills-hub.web.app" in text
+    assert "https://github.com/Mharbulous/skills-hub.git" in text
+    assert "Future Exact-Prompt Test" in text
     assert "plugin card" in text
     assert "Descriptor Fallback Test" in text
     assert "artifact.b64_url" in text

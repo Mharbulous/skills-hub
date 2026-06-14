@@ -6,11 +6,43 @@ Use this when Codex cannot directly control the Claude Cowork desktop app.
 
 - Claude Cowork is running in a clean profile or a profile where `skills-hub` is not installed.
 - The operator can approve bounded Cowork install prompts.
-- If this Cowork build cannot discover marketplaces from a bare root URL, the
-  Skills-hub marketplace has been added or published through Cowork's
-  plugin/marketplace mechanism before testing the exact prompt.
+- The Skills-hub GitHub repository is public, or Cowork has authenticated Git
+  access to clone it.
 
 ## Current Supported Test
+
+1. Open **Customize > Plugins > Add marketplace**.
+2. Choose **Add from a repository**.
+3. Enter:
+
+   ```text
+   https://github.com/Mharbulous/skills-hub.git
+   ```
+
+4. If Cowork shows a `skills-hub` plugin card, install it.
+5. Start a new Cowork chat and send:
+
+   ```text
+   /skills-hub
+   ```
+
+6. Reject the run if Cowork enters a base64 decode loop, asks for open-ended
+   setup input, or asks the user to paste a `.skill` URL, skill name, script,
+   manifest path, or bootstrap command.
+
+## Expected Success
+
+- Cowork discovers the root `.claude-plugin/marketplace.json` from the Git repository.
+- Cowork presents the `skills-hub` plugin card without using web_fetch/base64.
+- Installing the plugin makes `/skills-hub` available in a new chat.
+- `/skills-hub` bare command shows local help/status without fetching remote content.
+- `/skills-hub inventory`, `/skills-hub install <skill>`, and `/skills-hub update`
+  still verify signed Skills-hub artifacts and fail closed on verification errors.
+
+## Future Exact-Prompt Test
+
+Use this only after Cowork supports installing the Git marketplace from the
+hosted root URL or resolving hosted marketplace relative sources.
 
 1. Start a new Claude Cowork chat.
 2. Send:
@@ -19,19 +51,8 @@ Use this when Codex cannot directly control the Claude Cowork desktop app.
    Install https://skills-hub.web.app
    ```
 
-3. If Cowork shows a `skills-hub` plugin card, install it.
-4. Reject the run if Cowork enters a base64 decode loop, asks for open-ended
-   setup input, or asks the user to paste a `.skill` URL, skill name, script,
-   manifest path, or bootstrap command.
-
-## Expected Success
-
-- Cowork discovers the Skills-hub marketplace or registered plugin from the root URL.
-- Cowork presents the `skills-hub` plugin card without using web_fetch/base64.
-- Installing the plugin makes `/skills-hub` available in a new chat.
-- `/skills-hub` bare command shows local help/status without fetching remote content.
-- `/skills-hub inventory`, `/skills-hub install <skill>`, and `/skills-hub update`
-  still verify signed Skills-hub artifacts and fail closed on verification errors.
+3. Cowork should present the `skills-hub` plugin card without using the
+   descriptor/base64 fallback.
 
 ## Descriptor Fallback Test
 
@@ -56,6 +77,6 @@ descriptor fallback, Cowork stops with
 
 ## External Discovery Gate
 
-If Cowork cannot discover the marketplace from the bare root URL, exact-prompt
-acceptance is blocked until the marketplace is added or published through
-Cowork's external plugin registry.
+If Cowork cannot discover and install the marketplace from the bare root URL,
+exact-prompt acceptance is blocked until Cowork supports that flow or the
+marketplace is published through Cowork's external plugin registry.
