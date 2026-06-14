@@ -70,3 +70,21 @@ After all aspects are resolved, draft a concise vision statement in your own wor
 ## Phase 4
 
 Write up the vision.md document using the template.
+
+### Where to save VISION.md
+
+Co-locate VISION.md with the source code it describes — same folder as the core source files for that feature. This avoids drift between a separate documentation folder structure and the source tree.
+
+- **Feature-level vision:** save in the feature's source folder (e.g. `src/features/upload/VISION.md`)
+- **App-level vision:** save in the repo root (e.g. `./VISION.md`)
+- **Skill-level vision:** save in the skill's folder (e.g. `.claude/skills/my-skill/VISION.md`)
+
+Do NOT save VISION.md files in a separate `docs/` hierarchy mirroring the source tree.
+
+### Legacy VISION.md migration
+
+During Phase 1 discovery, check for any existing VISION.md files that are not co-located with their source code (e.g. files under `docs/Features/` or similar documentation-only folders). If any are found:
+
+1. **Always surface them to the user** — list each misplaced file, its current location, and the proposed source-code location.
+2. **If the target location has no existing VISION.md** — offer to move the file after Phase 4 is complete.
+3. **If the target location already has a VISION.md** — the misplaced file may be deprecated or a stale duplicate. Present both files to the user and ask which to keep, merge, or discard. Do not overwrite silently.
