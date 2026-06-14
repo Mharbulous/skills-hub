@@ -24,6 +24,9 @@ def load_build_module(public_dir):
     module.COWORK_PLUGIN_DIR = public_dir / "cowork" / "plugins" / "skills-hub"
     module.COWORK_MARKETPLACE_DIR = public_dir / ".claude-plugin"
     module.COWORK_MARKETPLACE = public_dir / ".claude-plugin" / "marketplace.json"
+    module.ROOT_MARKETPLACE_DIR = public_dir.parent / ".claude-plugin"
+    module.ROOT_MARKETPLACE = public_dir.parent / ".claude-plugin" / "marketplace.json"
+    module.ROOT_PLUGIN_DIR = public_dir.parent / "plugins" / "skills-hub"
     module.PACKAGE_INDEX = public_dir / "cowork" / "skill-packages" / "packages.json"
     module.PACKAGE_INDEX_SIG = public_dir / "cowork" / "skill-packages" / "packages.json.sig"
     module.MANIFEST = public_dir / "manifest.json"
@@ -261,28 +264,17 @@ def test_build_writes_cowork_marketplace_plugin(tmp_public):
 
     run_build(tmp_public)
 
-    plugin_root = tmp_public / "cowork" / "plugins" / "skills-hub"
-    plugin_json = json.loads((plugin_root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    marketplace = json.loads((tmp_public / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
-    files = {path.relative_to(plugin_root).as_posix() for path in plugin_root.rglob("*") if path.is_file()}
+    assert_plugin_tree(tmp_public / "cowork" / "plugins" / "skills-hub")
+    assert_plugin_tree(tmp_public.parent / "plugins" / "skills-hub")
 
-    assert plugin_json["name"] == "skills-hub"
-    assert plugin_json["version"] == "0.1.0"
-    assert plugin_json["skills"] == "./skills"
-    assert "install skills hub" in plugin_json["keywords"]
-    assert marketplace["plugins"][0]["name"] == "skills-hub"
-    assert marketplace["plugins"][0]["source"] == "./cowork/plugins/skills-hub"
-    assert files == {
-        ".claude-plugin/plugin.json",
-        "README.md",
-        "skills/skills-hub/SKILL.md",
-        "skills/skills-hub/scripts/manage_cowork_skills.py",
-        "skills/skills-hub/scripts/skills_hub_verify.py",
-        "skills/skills-hub/skills_hub_allowed_signers",
-    }
-    skill_md = (plugin_root / "skills" / "skills-hub" / "SKILL.md").read_text(encoding="utf-8")
-    assert "Manage Cowork-facing Skills-hub resolver wrappers" in skill_md
-    assert "Skills-hub Verified Resolver Stub" not in skill_md
+    hosted_marketplace = json.loads((tmp_public / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    root_marketplace = json.loads((tmp_public.parent / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    assert hosted_marketplace["name"] == "skills-hub-marketplace"
+    assert hosted_marketplace["plugins"][0]["name"] == "skills-hub"
+    assert hosted_marketplace["plugins"][0]["source"] == "./cowork/plugins/skills-hub"
+    assert root_marketplace["name"] == "skills-hub"
+    assert root_marketplace["plugins"][0]["name"] == "skills-hub"
+    assert root_marketplace["plugins"][0]["source"] == "./plugins/skills-hub"
 
 
 def test_cowork_marketplace_plugin_is_deterministic(tmp_public):
@@ -290,14 +282,20 @@ def test_cowork_marketplace_plugin_is_deterministic(tmp_public):
 
     run_build(tmp_public)
     first = plugin_tree_digest(tmp_public / "cowork" / "plugins" / "skills-hub")
+    first_root = plugin_tree_digest(tmp_public.parent / "plugins" / "skills-hub")
     first_marketplace = (tmp_public / ".claude-plugin" / "marketplace.json").read_bytes()
+    first_root_marketplace = (tmp_public.parent / ".claude-plugin" / "marketplace.json").read_bytes()
 
     run_build(tmp_public)
     second = plugin_tree_digest(tmp_public / "cowork" / "plugins" / "skills-hub")
+    second_root = plugin_tree_digest(tmp_public.parent / "plugins" / "skills-hub")
     second_marketplace = (tmp_public / ".claude-plugin" / "marketplace.json").read_bytes()
+    second_root_marketplace = (tmp_public.parent / ".claude-plugin" / "marketplace.json").read_bytes()
 
     assert second == first
+    assert second_root == first_root
     assert second_marketplace == first_marketplace
+    assert second_root_marketplace == first_root_marketplace
 
 
 def test_packaged_cowork_plugin_manager_runs_from_plugin_layout(tmp_public, tmp_path):
@@ -305,7 +303,7 @@ def test_packaged_cowork_plugin_manager_runs_from_plugin_layout(tmp_public, tmp_
         pytest.skip("ssh-keygen not available")
     make_skills_hub_control_panel(tmp_public / "skills")
     run_build(tmp_public)
-    plugin_skill = tmp_public / "cowork" / "plugins" / "skills-hub" / "skills" / "skills-hub"
+    plugin_skill = tmp_public.parent / "plugins" / "skills-hub" / "skills" / "skills-hub"
     manifest = tmp_path / "manifest.json"
     signature = tmp_path / "manifest.json.sig"
     install_root = tmp_path / "installed"
@@ -353,6 +351,27 @@ def plugin_tree_digest(path):
         digest.update(file_path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def assert_plugin_tree(plugin_root):
+    plugin_json = json.loads((plugin_root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    files = {path.relative_to(plugin_root).as_posix() for path in plugin_root.rglob("*") if path.is_file()}
+
+    assert plugin_json["name"] == "skills-hub"
+    assert plugin_json["version"] == "0.1.0"
+    assert plugin_json["skills"] == "./skills"
+    assert "install skills hub" in plugin_json["keywords"]
+    assert files == {
+        ".claude-plugin/plugin.json",
+        "README.md",
+        "skills/skills-hub/SKILL.md",
+        "skills/skills-hub/scripts/manage_cowork_skills.py",
+        "skills/skills-hub/scripts/skills_hub_verify.py",
+        "skills/skills-hub/skills_hub_allowed_signers",
+    }
+    skill_md = (plugin_root / "skills" / "skills-hub" / "SKILL.md").read_text(encoding="utf-8")
+    assert "Manage Cowork-facing Skills-hub resolver wrappers" in skill_md
+    assert "Skills-hub Verified Resolver Stub" not in skill_md
 
 
 def test_build_copies_cowork_bootstrap_files(tmp_public):

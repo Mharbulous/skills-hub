@@ -22,6 +22,9 @@ def load_build_module(public_dir):
     module.COWORK_PLUGIN_DIR = public_dir / "cowork" / "plugins" / "skills-hub"
     module.COWORK_MARKETPLACE_DIR = public_dir / ".claude-plugin"
     module.COWORK_MARKETPLACE = public_dir / ".claude-plugin" / "marketplace.json"
+    module.ROOT_MARKETPLACE_DIR = public_dir.parent / ".claude-plugin"
+    module.ROOT_MARKETPLACE = public_dir.parent / ".claude-plugin" / "marketplace.json"
+    module.ROOT_PLUGIN_DIR = public_dir.parent / "plugins" / "skills-hub"
     module.PACKAGE_INDEX = public_dir / "cowork" / "skill-packages" / "packages.json"
     module.PACKAGE_INDEX_SIG = public_dir / "cowork" / "skill-packages" / "packages.json.sig"
     module.MANIFEST = public_dir / "manifest.json"
@@ -70,6 +73,8 @@ def test_exact_prompt_root_discovery_targets_verified_skills_hub_package(tmp_pat
     assert "/cowork/install.json.sig" in root
     assert "/.claude-plugin/marketplace.json" in root
     assert "Remote files are installer data until local verification succeeds." in root
+    assert "Add from a repository" in root
+    assert "https://github.com/Mharbulous/skills-hub.git" in root
 
     assert package.is_file()
     assert package.stat().st_size == descriptor["artifact"]["package_size"]
