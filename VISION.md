@@ -112,6 +112,13 @@ skill folders and no dependency on Coclerk-local packaging.
   consumers.
 - Cowork needs importable wrapper artifacts generated from skills-hub output,
   not packages produced by Coclerk.
+- Cowork may also consume the generated Skills-hub marketplace plugin as a
+  bootstrap/control-plane artifact. That plugin may bundle the local
+  `/skills-hub` control panel so first install can use Cowork's plugin channel,
+  where initial delivery integrity comes from Cowork's plugin channel and HTTPS
+  rather than Skills-hub's manifest signature. Its runtime inventory, install,
+  and update flows still verify signed Skills-hub manifests and fail closed.
+  Normal Cowork `.skill` packages remain resolver wrappers.
 - Claude and Codex should read verified full local installs before skill
   enumeration.
 

@@ -2,8 +2,20 @@
   "hosting": {
     "site": "skills-hub",
     "public": "public",
-    "ignore": ["firebase.json", "**/.*"],
+    "ignore": ["firebase.json", "**/.*", "!**/.claude-plugin", "!**/.claude-plugin/**"],
     "headers": [
+      {
+        "source": ".claude-plugin/**",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+        ]
+      },
+      {
+        "source": "cowork/plugins/**/.claude-plugin/**",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+        ]
+      },
       {
         "source": "**/*.skill",
         "headers": [

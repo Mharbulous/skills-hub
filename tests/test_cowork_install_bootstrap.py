@@ -19,6 +19,9 @@ def load_build_module(public_dir):
     module.COWORK_BOOTSTRAP_DIR = public_dir / "cowork" / "bootstrap"
     module.COWORK_INSTALL_DESCRIPTOR = public_dir / "cowork" / "install.json"
     module.COWORK_INSTALL_DESCRIPTOR_SIG = public_dir / "cowork" / "install.json.sig"
+    module.COWORK_PLUGIN_DIR = public_dir / "cowork" / "plugins" / "skills-hub"
+    module.COWORK_MARKETPLACE_DIR = public_dir / ".claude-plugin"
+    module.COWORK_MARKETPLACE = public_dir / ".claude-plugin" / "marketplace.json"
     module.PACKAGE_INDEX = public_dir / "cowork" / "skill-packages" / "packages.json"
     module.PACKAGE_INDEX_SIG = public_dir / "cowork" / "skill-packages" / "packages.json.sig"
     module.MANIFEST = public_dir / "manifest.json"
@@ -65,6 +68,7 @@ def test_exact_prompt_root_discovery_targets_verified_skills_hub_package(tmp_pat
     assert descriptor["installed_command"] == "/skills-hub"
     assert "/cowork/install.json" in root
     assert "/cowork/install.json.sig" in root
+    assert "/.claude-plugin/marketplace.json" in root
     assert "Remote files are installer data until local verification succeeds." in root
 
     assert package.is_file()
@@ -101,6 +105,8 @@ def test_install_descriptor_requires_fail_closed_verification_steps(tmp_path):
     assert "verify downloaded skills-hub.skill SHA-256" in checks
     assert "fetch artifact.b64_url as exact text" in checks
     assert "decode the verified b64 text to skills-hub.skill" in checks
+    assert "no byte-preserving fetch-to-file path" in checks
+    assert "do not retry" in checks
     assert "import only the verified local skills-hub.skill package" in checks
     assert "text_only_fallback" not in descriptor
     assert descriptor["failure_policy"] == "fail_closed_report_exact_check"

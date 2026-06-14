@@ -1,0 +1,26 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "skills-hub-marketplace",
+  "description": "Claude Cowork plugin marketplace for Skills-hub.",
+  "owner": {
+    "name": "Skills-hub"
+  },
+  "plugins": [
+    {
+      "name": "skills-hub",
+      "version": "0.1.0",
+      "description": "Install and manage verified Skills-hub resolver-wrapper skills in Claude Cowork.",
+      "source": "./cowork/plugins/skills-hub",
+      "category": "productivity",
+      "homepage": "https://skills-hub.web.app",
+      "keywords": [
+        "skills-hub",
+        "skills hub",
+        "install skills hub",
+        "cowork skills",
+        "verified skills",
+        "resolver wrapper"
+      ]
+    }
+  ]
+}

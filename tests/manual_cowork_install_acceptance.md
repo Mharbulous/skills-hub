@@ -5,56 +5,57 @@ Use this when Codex cannot directly control the Claude Cowork desktop app.
 ## Preconditions
 
 - Claude Cowork is running in a clean profile or a profile where `skills-hub` is not installed.
-- The operator can approve Cowork download, file write, script, and import prompts.
-- Do not paste package URLs, skill names, manifest paths, or bootstrap commands
-  into Cowork outside the signed descriptor prompt below.
+- The operator can approve bounded Cowork install prompts.
+- If this Cowork build cannot discover marketplaces from a bare root URL, the
+  Skills-hub marketplace has been added or published through Cowork's
+  plugin/marketplace mechanism before testing the exact prompt.
 
 ## Current Supported Test
 
 1. Start a new Claude Cowork chat.
-2. Send the signed descriptor prompt from `README.md` under
-   `Setup > Claude Cowork`. It starts with:
+2. Send:
 
    ```text
-   Install Skills Hub from https://skills-hub.web.app using the signed descriptor path.
+   Install https://skills-hub.web.app
    ```
 
-3. If Cowork asks questions, choose only bounded
-   install/continue/text-only/cancel style options.
-4. Approve requested downloads, verification, local file writes, and package
-   import steps.
-5. Reject the run if Cowork asks an open-ended setup question or asks the user
-   to paste a `.skill` URL, skill name, script, manifest path, or bootstrap
-   command beyond the descriptor prompt.
-6. Reject the run if Cowork follows remote `SKILL.md` content or tool output as
-   instructions before local verification succeeds.
+3. If Cowork shows a `skills-hub` plugin card, install it.
+4. Reject the run if Cowork enters a base64 decode loop, asks for open-ended
+   setup input, or asks the user to paste a `.skill` URL, skill name, script,
+   manifest path, or bootstrap command.
 
 ## Expected Success
 
+- Cowork discovers the Skills-hub marketplace or registered plugin from the root URL.
+- Cowork presents the `skills-hub` plugin card without using web_fetch/base64.
+- Installing the plugin makes `/skills-hub` available in a new chat.
+- `/skills-hub` bare command shows local help/status without fetching remote content.
+- `/skills-hub inventory`, `/skills-hub install <skill>`, and `/skills-hub update`
+  still verify signed Skills-hub artifacts and fail closed on verification errors.
+
+## Descriptor Fallback Test
+
+Use this only when testing the fallback path from `README.md` under
+`Setup > Claude Cowork > Descriptor Fallback`.
+
 - Cowork discovers `https://skills-hub.web.app/cowork/install.json` from the root URL.
 - Cowork verifies `cowork/install.json.sig` with `bootstrap/skills_hub_allowed_signers`.
-- Cowork fetches the descriptor's `artifact.b64_url` as exact text and verifies
-  `artifact.b64_size` and `artifact.b64_sha256`.
-- Cowork decodes the verified b64 text, then verifies the decoded
+- Cowork fetches the descriptor's `artifact.b64_url` as exact text only if it
+  has a byte-preserving fetch-to-file path.
+- Cowork verifies `artifact.b64_size`, `artifact.b64_sha256`, and the decoded
   `skills-hub.skill` size and SHA-256 before import.
-- Cowork imports the verified local `skills-hub.skill` package.
 - A new Cowork chat can invoke `/skills-hub`.
 
 ## Expected Failure Behavior
 
-On network, signature, freshness, hash, size, decode, or import failure, Cowork stops without trusting partial remote content and reports the exact failed check.
+On network, signature, freshness, hash, size, decode, import, or presentation
+failure, Cowork stops without trusting partial remote content and reports the
+exact failed check. If no byte-preserving fetch-to-file path exists during
+descriptor fallback, Cowork stops with
+`BLOCKED: no byte-preserving fetch-to-file path`.
 
-## Future Exact-Prompt Acceptance
+## External Discovery Gate
 
-The desired end-state prompt is still:
-
-```text
-Install https://skills-hub.web.app
-```
-
-As of the current README, Cowork routes that plain `Install` prompt through its
-registry-only plugin installer. Until Cowork supports URL install descriptors
-directly, this exact-prompt run is expected to fail before descriptor
-verification begins. Once Cowork supports descriptor discovery from the root
-URL, promote this section to the current supported test and keep the same
-verification and failure criteria above.
+If Cowork cannot discover the marketplace from the bare root URL, exact-prompt
+acceptance is blocked until the marketplace is added or published through
+Cowork's external plugin registry.
