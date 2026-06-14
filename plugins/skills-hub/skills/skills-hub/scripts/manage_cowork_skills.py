@@ -96,6 +96,13 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def emit_structured_error(skill: str, message: str, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps({"error": message, "skill": skill}, indent=2))
+        raise SystemExit(1)
+    fail(f"{skill}: {message}")
+
+
 def script_dir() -> Path:
     return Path(__file__).resolve().parent
 
@@ -230,14 +237,30 @@ def catalog_from_packages(packages: dict) -> dict:
     return {"skills": [{"name": entry["name"]} for entry in packages.get("packages", []) if entry.get("name")]}
 
 
+def skill_dir_install_root() -> list[Path]:
+    parent = skill_dir().parent
+    if parent.name == "skills" and parent.parent.exists():
+        return [parent.parent]
+    return []
+
+
 def default_install_roots() -> list[Path]:
+    roots = skill_dir_install_root()
     appdata = os.environ.get("APPDATA")
-    if not appdata:
-        return []
-    base = Path(appdata) / "Claude" / "local-agent-mode-sessions" / "skills-plugin"
-    if not base.exists():
-        return []
-    return [base]
+    if appdata:
+        base = Path(appdata) / "Claude" / "local-agent-mode-sessions" / "skills-plugin"
+        if base.exists() and base not in roots:
+            roots.append(base)
+    return roots
+
+
+def normalize_install_roots(roots: list[Path]) -> list[Path]:
+    normalized: list[Path] = []
+    for root in roots:
+        corrected = root.parent if root.name == "skills" else root
+        if corrected not in normalized:
+            normalized.append(corrected)
+    return normalized
 
 
 def context_install_roots(context: dict) -> list[Path]:
@@ -319,7 +342,34 @@ def inventory_roots(args, context: dict) -> list[Path]:
     roots = [Path(p) for p in args.install_root] if args.install_root else context_install_roots(context)
     if not roots:
         roots = default_install_roots()
-    return roots
+    return normalize_install_roots(roots)
+
+
+def no_install_root_message(args, context: dict) -> str:
+    explicit = ", ".join(args.install_root) if args.install_root else "none supplied"
+    stub = context.get("original_stub_dir") or "absent"
+    appdata = os.environ.get("APPDATA") or "absent"
+    own_parent = skill_dir().parent
+    own_hint = f"{own_parent} (not under a skills/ parent)" if own_parent.name != "skills" else "absent"
+    return (
+        "could not find Cowork install root. Tried:\n"
+        f"  --install-root: {explicit}\n"
+        f"  context original_stub_dir: {stub}\n"
+        f"  skill_dir parent: {own_hint}\n"
+        f"  APPDATA: {appdata}\n"
+        "  Rerun with --install-root <dir that CONTAINS skills/> "
+        "(the parent of the skills/ directory; the skills/ dir itself is auto-corrected)."
+    )
+
+
+def warn_empty_install_roots(roots: list[Path]) -> None:
+    listed = "\n".join(f"  - {root}" for root in roots)
+    print(
+        "skills-hub manager: scanned install roots but found 0 SKILL.md under */skills/*/:\n"
+        f"{listed}\n"
+        "  Is --install-root the parent of skills/ (the dir that CONTAINS skills/)?",
+        file=sys.stderr,
+    )
 
 
 def classify_local_installed(name: str, installed: list[InstalledSkill]) -> LocalInventoryRow:
@@ -377,9 +427,17 @@ def print_degraded_inventory(error: str, rows: list[LocalInventoryRow], as_json:
         print(f"{row.local_status}\t{row.name}\t{row.evidence}{suffix}")
 
 
+def parse_names_filter(args) -> set[str] | None:
+    raw = getattr(args, "names", None)
+    if not raw:
+        return None
+    return {n.strip() for n in raw.split(",") if n.strip()}
+
+
 def cmd_inventory(args) -> None:
     context = read_context()
     base_url = args.base_url or context.get("base_url") or BASE_URL
+    names_filter = parse_names_filter(args)
     packages_path = getattr(args, "packages", None)
     packages_signature = getattr(args, "packages_signature", None)
     if packages_path and not packages_signature:
@@ -409,12 +467,20 @@ def cmd_inventory(args) -> None:
     except CatalogUnavailable as exc:
         roots = inventory_roots(args, context)
         installed = discover_installed(roots) if roots else {}
-        print_degraded_inventory(str(exc), build_local_inventory(installed), args.json)
+        local_rows = build_local_inventory(installed)
+        if names_filter:
+            local_rows = [r for r in local_rows if r.name in names_filter]
+        print_degraded_inventory(str(exc), local_rows, args.json)
         return
     roots = inventory_roots(args, context)
     if not roots:
-        fail("could not find Cowork install root; rerun with --install-root <path>")
-    rows = build_inventory(catalog, discover_installed(roots))
+        fail(no_install_root_message(args, context))
+    installed = discover_installed(roots)
+    if not installed:
+        warn_empty_install_roots(roots)
+    rows = build_inventory(catalog, installed)
+    if names_filter:
+        rows = [r for r in rows if r.name in names_filter]
     print_inventory(rows, args.json)
 
 
@@ -428,7 +494,6 @@ def cmd_fetch_package(args) -> None:
     verifier = load_verifier()
     base_url = (args.base_url or context.get("base_url") or BASE_URL).rstrip("/")
     output_dir = args.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
     allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
     relpath = f"cowork/skill-packages/{args.skill}.skill"
 
@@ -436,13 +501,30 @@ def cmd_fetch_package(args) -> None:
         tmp_path = Path(tmp)
         manifest = tmp_path / "manifest.json"
         signature = tmp_path / "manifest.json.sig"
-        package = output_dir / f"{args.skill}.skill"
-        write_remote_file(base_url, "manifest.json", manifest)
-        write_remote_file(base_url, "manifest.json.sig", signature)
-        write_remote_file(base_url, relpath, package)
+        try:
+            write_remote_file(base_url, "manifest.json", manifest)
+            write_remote_file(base_url, "manifest.json.sig", signature)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError) as exc:
+            emit_structured_error(args.skill, f"could not download signed manifest from {base_url}: {exc}", args.json)
         try:
             verifier.verify_signature(manifest, signature, allowed_signers)
             manifest_doc = verifier.load_manifest(manifest)
+        except verifier.VerificationError as exc:
+            fail(str(exc))
+        if relpath not in manifest_doc.get("files", {}):
+            emit_structured_error(args.skill, "skill not found in catalog", args.json)
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            emit_structured_error(args.skill, f"output directory not writable: {output_dir}; pass --output-dir <writable dir> ({exc})", args.json)
+        package = output_dir / f"{args.skill}.skill"
+        try:
+            write_remote_file(base_url, relpath, package)
+        except (urllib.error.HTTPError, urllib.error.URLError, RuntimeError) as exc:
+            emit_structured_error(args.skill, f"could not download package {relpath}: {exc}", args.json)
+        except OSError as exc:
+            emit_structured_error(args.skill, f"output directory not writable: {output_dir}; pass --output-dir <writable dir> ({exc})", args.json)
+        try:
             verifier.verify_artifact(manifest_doc, relpath, package)
         except verifier.VerificationError as exc:
             try:
@@ -781,6 +863,7 @@ def main() -> None:
 
     inventory = sub.add_parser("inventory")
     inventory.add_argument("--install-root", action="append", default=[])
+    inventory.add_argument("--names", help="comma-separated skill names to include")
     inventory.add_argument("--index", type=Path)
     inventory.add_argument("--manifest", type=Path)
     inventory.add_argument("--signature", type=Path)

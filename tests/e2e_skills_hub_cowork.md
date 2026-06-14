@@ -267,7 +267,9 @@ Record: PASS, FAIL, or EXPECTED LIMITATION.
 ### 6a: Install a Non-Existent Skill
 
 1. Send `/skills-hub install this-skill-does-not-exist`.
-2. The response must report an error. The install must not proceed.
+2. `fetch-package` must return structured JSON
+   (`{"error": "skill not found in catalog", "skill": "this-skill-does-not-exist"}`)
+   and exit non-zero — no raw Python traceback. The install must not proceed.
 3. No Save-skill card should appear.
 
 Ask the tester: *"Did the install correctly refuse with an error message?"*

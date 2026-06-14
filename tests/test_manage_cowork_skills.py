@@ -180,6 +180,117 @@ def test_inventory_classifies_missing_stale_orphan_and_current(tmp_path):
     assert rows["orphan"].status == "orphan"
 
 
+def test_inventory_autocorrects_skills_dir_root(tmp_path, capsys):
+    manager = load_manager()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"skills": [{"name": "alpha"}]}), encoding="utf-8")
+    skills_dir = tmp_path / ".claude" / "skills"
+    alpha = skills_dir / "alpha"
+    alpha.mkdir(parents=True)
+    (alpha / "SKILL.md").write_text(
+        "Skills-hub Verified Resolver Stub\npython skills-hub-fetch.py cowork alpha\n",
+        encoding="utf-8",
+    )
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(skills_dir)],
+            index=None,
+            manifest=manifest,
+            signature=None,
+            base_url=None,
+            allowed_signers=None,
+            json=True,
+        )
+    )
+
+    rows = {row["name"]: row for row in json.loads(capsys.readouterr().out)}
+    assert rows["alpha"]["status"] == "current"
+
+
+def test_inventory_no_root_error_lists_attempts(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.setattr(manager, "skill_dir", lambda: tmp_path / "plugins" / "skills-hub")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"skills": [{"name": "alpha"}]}), encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        manager.cmd_inventory(
+            SimpleNamespace(
+                install_root=[],
+                index=None,
+                manifest=manifest,
+                signature=None,
+                base_url=None,
+                allowed_signers=None,
+                json=True,
+                names=None,
+            )
+        )
+
+    assert "--install-root" in capsys.readouterr().err
+
+
+def test_fetch_package_unknown_skill_returns_structured_error(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    key, allowed = make_signing_material(tmp_path)
+    base = tmp_path / "base"
+    base.mkdir()
+    write_signed_manifest(base, key, skills=[{"name": "alpha"}], files={})
+    out = tmp_path / "out"
+
+    with serve_dir(base) as base_url:
+        with pytest.raises(SystemExit):
+            manager.cmd_fetch_package(
+                SimpleNamespace(
+                    skill="ghost",
+                    base_url=base_url,
+                    output_dir=out,
+                    allowed_signers=allowed,
+                    json=True,
+                )
+            )
+
+    error = json.loads(capsys.readouterr().out)
+    assert error == {"error": "skill not found in catalog", "skill": "ghost"}
+    assert not (out / "ghost.skill").exists()
+
+
+def test_fetch_package_unwritable_output_dir_returns_structured_error(tmp_path, capsys):
+    manager = load_manager()
+    key, allowed = make_signing_material(tmp_path)
+    base = tmp_path / "base"
+    package_rel = "cowork/skill-packages/alpha.skill"
+    package = base / package_rel
+    package.parent.mkdir(parents=True)
+    package.write_bytes(b"package")
+    write_signed_manifest(
+        base,
+        key,
+        skills=[{"name": "alpha"}],
+        files={package_rel: {"sha256": sha256_bytes(b"package"), "size": len(b"package")}},
+    )
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a dir", encoding="utf-8")
+
+    with serve_dir(base) as base_url:
+        with pytest.raises(SystemExit):
+            manager.cmd_fetch_package(
+                SimpleNamespace(
+                    skill="alpha",
+                    base_url=base_url,
+                    output_dir=blocker / "sub",
+                    allowed_signers=allowed,
+                    json=True,
+                )
+            )
+
+    error = json.loads(capsys.readouterr().out)
+    assert error["skill"] == "alpha"
+    assert "--output-dir" in error["error"]
+
+
 def test_inventory_command_uses_explicit_manifest_without_repo_root(tmp_path, monkeypatch, capsys):
     manager = load_manager()
     manifest = tmp_path / "manifest.json"
@@ -308,6 +419,7 @@ def test_inventory_degrades_with_empty_installed_when_remote_blocked_and_no_inst
     manager = load_manager()
     _, allowed = make_signing_material(tmp_path)
     monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.setattr(manager, "skill_dir", lambda: tmp_path / "plugins" / "skills-hub")
 
     def blocked_fetch(url):
         raise manager.urllib.error.URLError("network blocked")
@@ -323,6 +435,7 @@ def test_inventory_degrades_with_empty_installed_when_remote_blocked_and_no_inst
             base_url="https://skills-hub.example.invalid",
             allowed_signers=allowed,
             json=True,
+            names=None,
         )
     )
 
@@ -670,3 +783,49 @@ def test_assimilate_github_pr_surfaces_api_failure(tmp_path, monkeypatch):
                 base="main",
             )
         )
+
+
+def test_inventory_names_filter(tmp_path, capsys):
+    manager = load_manager()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps({"skills": [{"name": "alpha"}, {"name": "beta"}, {"name": "gamma"}]}),
+        encoding="utf-8",
+    )
+    make_installed(
+        tmp_path, "alpha",
+        "Skills-hub Verified Resolver Stub\npython skills-hub-fetch.py cowork alpha\n",
+    )
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(tmp_path)],
+            index=None, manifest=manifest, signature=None,
+            base_url=None, allowed_signers=None, json=True,
+            names="alpha,gamma",
+        )
+    )
+
+    rows = json.loads(capsys.readouterr().out)
+    names = {r["name"] for r in rows}
+    assert names == {"alpha", "gamma"}
+    assert "beta" not in names
+
+
+def test_skill_dir_install_root_fallback(tmp_path, monkeypatch):
+    manager = load_manager()
+    skills_dir = tmp_path / "skills"
+    hub_dir = skills_dir / "skills-hub"
+    hub_dir.mkdir(parents=True)
+    monkeypatch.setattr(manager, "skill_dir", lambda: hub_dir)
+    roots = manager.skill_dir_install_root()
+    assert roots == [tmp_path]
+
+
+def test_skill_dir_install_root_no_match(tmp_path, monkeypatch):
+    manager = load_manager()
+    other_dir = tmp_path / "plugins" / "skills-hub"
+    other_dir.mkdir(parents=True)
+    monkeypatch.setattr(manager, "skill_dir", lambda: other_dir)
+    roots = manager.skill_dir_install_root()
+    assert roots == []

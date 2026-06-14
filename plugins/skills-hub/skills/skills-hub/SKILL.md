@@ -43,15 +43,21 @@ Run:
 python scripts/manage_cowork_skills.py inventory --json
 ```
 
+To check only specific skills (keeps output small for context windows), pass
+`--names` with a comma-separated list:
+
+```bash
+python scripts/manage_cowork_skills.py inventory --names vision,handover --json
+```
+
 Branch on the JSON shape:
 
 - JSON array: report each row's `status`, `name`, `evidence`, and `path`.
   Valid statuses are `current`, `missing`, `stale-wrapper`, `orphan`, and
   `conflict`.
-- JSON object with `catalog.status == "blocked"`: report `catalog.error`, then
-  list `installed` entries as unverified local-only evidence. Do not install or
-  update anything while the catalog is blocked; tell the user the catalog must
-  be verifiable first.
+- JSON object with `catalog.status == "blocked"`: handle as described under
+  [Blocked catalog](#blocked-catalog) below. Do not install or update anything
+  while the catalog is blocked.
 
 If Cowork's shell network path cannot reach `skills-hub.web.app` and the user
 asks to debug or use the restricted text fallback, fetch the text artifacts
@@ -70,27 +76,43 @@ python scripts/manage_cowork_skills.py inventory --packages packages.json --pack
 This fallback only verifies the package catalog for inventory status; it is not
 authorization to install or update a package.
 
-If Cowork's install root is unclear, rerun with `--install-root <path>` using
-the path the user confirms from Cowork.
+If inventory reports every skill as `missing`, or prints a stderr note that it
+found 0 SKILL.md files, the install root is almost certainly wrong. Rerun with
+`--install-root <path>`, where `<path>` is the directory that **contains**
+`skills/` (its parent), not the `skills/` directory itself. For example, if
+skills live at `/mnt/.claude/skills/`, pass `--install-root /mnt/.claude`. If
+you pass the `skills/` directory directly, the script auto-corrects to its
+parent, but prefer passing the parent explicitly.
 
 ### `/skills-hub install <skill>`
 
 Run inventory first. If the named skill is `current`, ask for bounded
 confirmation before re-importing it. If inventory returns a blocked catalog
-object, report the exact `catalog.error` and stop.
+object, handle it as described under [Blocked catalog](#blocked-catalog) and
+stop.
 
 For a confirmed install, fetch the published verified package:
 
 ```bash
-python scripts/manage_cowork_skills.py fetch-package <skill> --json
+python scripts/manage_cowork_skills.py fetch-package <skill> --output-dir <writable dir> --json
 ```
 
-The script downloads `manifest.json`, verifies `manifest.json.sig`, verifies
-the `.skill` package's hash and size, and writes the package to the output
-folder. Present the returned `package_path` with `mcp__cowork__present_files`
-so Cowork shows a Save-skill card. Tell the user to click **Save skill** and
-rerun `/skills-hub inventory` for confirmation. Do not print a bare path as the
-normal import mechanism.
+Pass `--output-dir <writable dir>` (e.g. the session outputs directory)
+whenever the current working directory may be read-only — this is common when
+running from a plugin's own directory in the sandbox. If the output directory
+is not writable, the script returns `{"error": "output directory not
+writable: ...", "skill": "<skill>"}`; rerun with a writable `--output-dir`.
+
+If the requested skill is not in the verified catalog, the script returns
+`{"error": "skill not found in catalog", "skill": "<skill>"}` and exits
+non-zero. Report that plainly and stop; do not retry.
+
+On success the script downloads `manifest.json`, verifies `manifest.json.sig`,
+verifies the `.skill` package's hash and size, and writes the package to the
+output folder. Present the returned `package_path` with
+`mcp__cowork__present_files` so Cowork shows a Save-skill card. Tell the user to
+click **Save skill** and rerun `/skills-hub inventory` for confirmation. Do not
+print a bare path as the normal import mechanism.
 
 If Cowork's shell network path cannot reach `skills-hub.web.app`, use the
 restricted text workflow instead:
@@ -107,30 +129,48 @@ freshness, size, and SHA-256 checks pass.
 
 ### `/skills-hub update <skill>`
 
-Run inventory first. If inventory returns a blocked catalog object, report the
-exact `catalog.error` and stop. If the named skill is not `stale-wrapper`,
-report its current status and stop.
+Run inventory first. If inventory returns a blocked catalog object, handle it as
+described under [Blocked catalog](#blocked-catalog) and stop. If the named skill
+is not `stale-wrapper`, report its current status and stop.
 
 For a stale wrapper, ask for bounded confirmation, then run:
 
 ```bash
-python scripts/manage_cowork_skills.py fetch-package <skill> --json
+python scripts/manage_cowork_skills.py fetch-package <skill> --output-dir <writable dir> --json
 ```
 
 Present the returned `package_path` with `mcp__cowork__present_files` as one
-Save-skill card.
+Save-skill card. The `--output-dir` and error-handling notes from the install
+section apply here too.
 
 ### `/skills-hub update all`
 
-Run inventory first. If inventory returns a blocked catalog object, report the
-exact `catalog.error` and stop.
+Run inventory first. If inventory returns a blocked catalog object, handle it as
+described under [Blocked catalog](#blocked-catalog) and stop.
 
 Target only rows with `status == "stale-wrapper"`. Ignore `current`, `missing`,
 `orphan`, and `conflict`. If no stale wrappers exist, say so and stop. Otherwise
 show the full stale-wrapper target list once and ask for a single bounded
 confirmation before fetching packages. For each confirmed target, run
-`fetch-package <skill> --json` and present one verified Save-skill card with
-`mcp__cowork__present_files`.
+`fetch-package <skill> --output-dir <writable dir> --json` and present one
+verified Save-skill card with `mcp__cowork__present_files`.
+
+## Blocked catalog
+
+When inventory returns `catalog.status == "blocked"`, the verified catalog could
+not be reached or failed verification, so install and update are unsafe. Do not
+just print the raw `catalog.error`. Instead:
+
+1. State plainly that the verified catalog is unavailable, and include
+   `catalog.error` as the underlying reason.
+2. Give the user actionable next steps:
+   - Add `skills-hub.web.app` to the sandbox network allowlist, then start a new
+     Cowork session (network changes do not take effect mid-session).
+   - Or use the restricted text-fallback workflow (the
+     `skills-hub-from-text.md` page plus the `decode-package` subcommand) for the
+     specific skill.
+3. List the `installed` entries as unverified local-only evidence, and stop.
+   Do not install or update while the catalog is blocked.
 
 ## Failure Rules
 
