@@ -1,0 +1,13 @@
+{
+  "name": "skills-hub",
+  "version": "0.0.0-spike",
+  "description": "Spike plugin for validating Cowork repository marketplace install.",
+  "author": {
+    "name": "Skills-hub"
+  },
+  "homepage": "https://skills-hub.web.app",
+  "keywords": [
+    "skills-hub"
+  ],
+  "skills": "./skills"
+}
