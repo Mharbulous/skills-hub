@@ -167,7 +167,9 @@ def write_override_dir(skill_dir, harness):
 def render_cowork_stub(skill_dir):
     template = COWORK_TEMPLATE.read_text(encoding="utf-8")
     body = template.replace("{skill_name}", skill_dir.name)
-    return render(merged_frontmatter(skill_dir, "cowork"), body)
+    fm = merged_frontmatter(skill_dir, "cowork")
+    fm["source"] = "skills-hub"
+    return render(fm, body)
 
 
 def write_cowork_package(skill_dir):

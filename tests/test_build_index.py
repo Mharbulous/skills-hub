@@ -411,6 +411,7 @@ def test_cowork_package_contains_stub_and_fetcher(tmp_public):
     assert names == {"alpha/SKILL.md", "alpha/skills-hub-fetch.py", "alpha/skills_hub_allowed_signers"}
     assert "Skills-hub Verified Resolver Stub" in skill_md
     assert "description: Alpha trigger" in skill_md
+    assert "source: skills-hub" in skill_md
     assert "Canonical alpha body." not in skill_md
     assert "skills-hub-from-text.md" not in skill_md
 
