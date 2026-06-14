@@ -40,6 +40,20 @@ For the worked example, fetch:
 https://skills-hub.web.app/cowork/skill-packages/skills-hub.skill.b64.txt
 ```
 
+## Inventory from Text Artifacts
+
+If `/skills-hub inventory` cannot download `manifest.json` from the shell
+network path, use the saved `packages.json`, `packages.json.sig`, and
+`skills_hub_allowed_signers` files as a verified catalog source:
+
+```bash
+python scripts/manage_cowork_skills.py inventory --packages packages.json --packages-signature packages.json.sig --allowed-signers skills_hub_allowed_signers --json
+```
+
+The package index only supplies verified catalog names for inventory. It does
+not permit install or update unless the package bytes are separately decoded
+and verified below.
+
 ## Decode the Package
 
 From the directory containing the verified local `skills-hub` `SKILL.md`, run

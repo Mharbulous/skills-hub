@@ -120,6 +120,37 @@ def write_signed_packages(base_dir, key, package_data=b"package"):
     return packages_path, base_dir / "packages.json.sig"
 
 
+def write_signed_packages_index(base_dir, key, names):
+    package_index = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "max_age_seconds": 3600,
+        "base_url": "https://skills-hub.web.app",
+        "packages": [
+            {
+                "name": name,
+                "skill_path": f"cowork/skill-packages/{name}.skill",
+                "b64_path": f"cowork/skill-packages/{name}.skill.b64.txt",
+                "sha256": sha256_bytes(name.encode("utf-8")),
+                "size": len(name),
+            }
+            for name in names
+        ],
+    }
+    packages_path = base_dir / "packages.json"
+    packages_path.write_text(json.dumps(package_index, indent=2), encoding="utf-8")
+    canonical = base_dir / "packages.canonical.json"
+    canonical.write_text(
+        json.dumps(package_index, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(key), "-n", "skills-hub-manifest", str(canonical)], check=True)
+    (base_dir / "packages.canonical.json.sig").replace(base_dir / "packages.json.sig")
+    canonical.unlink()
+    return packages_path, base_dir / "packages.json.sig"
+
+
 def test_inventory_classifies_missing_stale_orphan_and_current(tmp_path):
     manager = load_manager()
     catalog = {
@@ -298,6 +329,33 @@ def test_inventory_degrades_with_empty_installed_when_remote_blocked_and_no_inst
     output = json.loads(capsys.readouterr().out)
     assert output["catalog"]["status"] == "blocked"
     assert output["installed"] == []
+
+
+def test_inventory_command_uses_signed_packages_index_for_text_fallback(tmp_path, capsys):
+    manager = load_manager()
+    key, allowed = make_signing_material(tmp_path)
+    packages, signature = write_signed_packages_index(tmp_path, key, ["alpha", "beta"])
+    make_installed(tmp_path, "alpha", "Skills-hub Verified Resolver Stub\npython skills-hub-fetch.py cowork alpha\n")
+    make_installed(tmp_path, "orphan", "local skill\n")
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(tmp_path)],
+            index=None,
+            manifest=None,
+            signature=None,
+            packages=packages,
+            packages_signature=signature,
+            base_url=None,
+            allowed_signers=allowed,
+            json=True,
+        )
+    )
+
+    rows = {row["name"]: row for row in json.loads(capsys.readouterr().out)}
+    assert rows["alpha"]["status"] == "current"
+    assert rows["beta"]["status"] == "missing"
+    assert rows["orphan"]["status"] == "orphan"
 
 
 def test_inventory_command_verifies_explicit_manifest_when_signature_supplied(tmp_path, capsys):

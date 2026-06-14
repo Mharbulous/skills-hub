@@ -226,6 +226,10 @@ def catalog_names(catalog: dict) -> set[str]:
     return {entry["name"] for entry in catalog.get("skills", [])}
 
 
+def catalog_from_packages(packages: dict) -> dict:
+    return {"skills": [{"name": entry["name"]} for entry in packages.get("packages", []) if entry.get("name")]}
+
+
 def default_install_roots() -> list[Path]:
     appdata = os.environ.get("APPDATA")
     if not appdata:
@@ -376,20 +380,32 @@ def print_degraded_inventory(error: str, rows: list[LocalInventoryRow], as_json:
 def cmd_inventory(args) -> None:
     context = read_context()
     base_url = args.base_url or context.get("base_url") or BASE_URL
+    packages_path = getattr(args, "packages", None)
+    packages_signature = getattr(args, "packages_signature", None)
+    if packages_path and not packages_signature:
+        fail("--packages requires --packages-signature")
+    if packages_signature and not packages_path:
+        fail("--packages-signature requires --packages")
     verifier = None
     allowed_signers = None
-    if args.signature or (not args.index and not args.manifest):
-        verifier = load_verifier()
+    if args.signature or packages_path or (not args.index and not args.manifest):
         allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
+    if args.signature or (not args.index and not args.manifest and not packages_path):
+        verifier = load_verifier()
     try:
-        catalog = load_catalog(
-            index_path=args.index,
-            manifest_path=args.manifest,
-            signature_path=args.signature,
-            base_url=base_url,
-            allowed_signers=allowed_signers,
-            verifier=verifier,
-        )
+        if packages_path:
+            packages = load_packages_index(packages_path)
+            verify_packages_signature(packages, packages_signature, allowed_signers)
+            catalog = catalog_from_packages(packages)
+        else:
+            catalog = load_catalog(
+                index_path=args.index,
+                manifest_path=args.manifest,
+                signature_path=args.signature,
+                base_url=base_url,
+                allowed_signers=allowed_signers,
+                verifier=verifier,
+            )
     except CatalogUnavailable as exc:
         roots = inventory_roots(args, context)
         installed = discover_installed(roots) if roots else {}
@@ -768,6 +784,8 @@ def main() -> None:
     inventory.add_argument("--index", type=Path)
     inventory.add_argument("--manifest", type=Path)
     inventory.add_argument("--signature", type=Path)
+    inventory.add_argument("--packages", type=Path)
+    inventory.add_argument("--packages-signature", type=Path)
     inventory.add_argument("--base-url")
     inventory.add_argument("--allowed-signers", type=Path)
     inventory.add_argument("--json", action="store_true")

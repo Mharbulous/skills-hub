@@ -53,6 +53,23 @@ Branch on the JSON shape:
   update anything while the catalog is blocked; tell the user the catalog must
   be verifiable first.
 
+If Cowork's shell network path cannot reach `skills-hub.web.app` and the user
+asks to debug or use the restricted text fallback, fetch the text artifacts
+listed at:
+
+```text
+https://skills-hub.web.app/cowork/bootstrap/skills-hub-from-text.md
+```
+
+Then run inventory against the verified package index:
+
+```bash
+python scripts/manage_cowork_skills.py inventory --packages packages.json --packages-signature packages.json.sig --allowed-signers skills_hub_allowed_signers --json
+```
+
+This fallback only verifies the package catalog for inventory status; it is not
+authorization to install or update a package.
+
 If Cowork's install root is unclear, rerun with `--install-root <path>` using
 the path the user confirms from Cowork.
 
