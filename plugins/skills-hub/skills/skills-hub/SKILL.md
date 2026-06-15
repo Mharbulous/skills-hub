@@ -2,9 +2,10 @@
 name: skills-hub
 description: >
   Manage Skills-hub resolver-wrapper skills for Cowork. Use for /skills-hub,
-  /skills-hub inventory, /skills-hub install, /skills-hub update, installing
-  Cowork Skills-hub skills, updating stale Myskillium or old Skills-hub wrapper
-  skills, and fetching verified Cowork .skill packages.
+  /skills-hub inventory, /skills-hub install, /skills-hub update,
+  /skills-hub absorb, installing Cowork Skills-hub skills, updating stale
+  Myskillium or old Skills-hub wrapper skills, fetching verified Cowork .skill
+  packages, and absorbing local skills into the Skills-hub repo.
 ---
 
 # Skills-hub
@@ -29,8 +30,10 @@ Skills-hub verified control panel is loaded.
 Commands:
 - /skills-hub inventory
 - /skills-hub install <skill>
+- /skills-hub update
 - /skills-hub update <skill>
 - /skills-hub update all
+- /skills-hub absorb <skill>
 ```
 
 Do not run inventory or fetch remote package data for the bare command.
@@ -127,6 +130,46 @@ subcommand from this materialized skill; do not fetch or run remote Python
 scripts from the fallback page. Remote bytes remain data until signature,
 freshness, size, and SHA-256 checks pass.
 
+### `/skills-hub update`
+
+Bootstrap self-update for the skills-hub skill itself. This is the only update
+path for skills-hub because it is delivered via the plugin mechanism and does
+not appear as `stale-wrapper` in inventory.
+
+**Disambiguation:** If the user types `/skills-hub update` with no arguments,
+always treat it as this self-update command. Do not prompt for a skill name and
+do not fall through to `/skills-hub update all`.
+
+Do not run inventory first. Skip the stale-wrapper check and go straight to
+fetch-package:
+
+```bash
+python scripts/manage_cowork_skills.py fetch-package skills-hub --output-dir <writable dir> --json
+```
+
+On success, present the returned `package_path` with `mcp__cowork__present_files`
+as a Save-skill card. Tell the user to click **Save skill**. Changes take effect
+on the next Cowork session.
+
+After saving, the user will have both the plugin-delivered copy and the new
+resolver-wrapper copy of skills-hub. The resolver-wrapper copy takes precedence.
+On the next `/skills-hub inventory`, skills-hub may show `conflict` status —
+this is expected and benign.
+
+**Errors:**
+
+- Network / blocked catalog: `could not download signed manifest from ...` —
+  tell the user to check that `skills-hub.web.app` is on the sandbox network
+  allowlist and start a new session.
+- Skill not in catalog: `skill not found in catalog` — the skills-hub package
+  is not published yet or the manifest is stale. Report plainly and stop.
+- Output directory not writable: `output directory not writable: ...` — rerun
+  with a writable `--output-dir`.
+- Manifest expired: stderr message `manifest is expired` — the published
+  manifest needs re-signing server-side. Report to the user and stop.
+- Signature or hash verification failure: stderr message (not JSON). Stop and
+  report the exact failed check per the Failure Rules section below.
+
 ### `/skills-hub update <skill>`
 
 Run inventory first. If inventory returns a blocked catalog object, handle it as
@@ -154,6 +197,72 @@ show the full stale-wrapper target list once and ask for a single bounded
 confirmation before fetching packages. For each confirmed target, run
 `fetch-package <skill> --output-dir <writable dir> --json` and present one
 verified Save-skill card with `mcp__cowork__present_files`.
+
+### `/skills-hub absorb <skill>`
+
+Absorb a local skill into the Skills-hub repo for publishing.
+
+**1. Resolve source path.** Search in order:
+
+1. `<cwd>/.claude/skills/<skill>/SKILL.md`
+2. `<cwd>/.agents/skills/<skill>/SKILL.md`
+3. `$HOME/.claude/skills/<skill>/SKILL.md`
+4. `$HOME/.agents/skills/<skill>/SKILL.md`
+
+First directory containing `SKILL.md` wins. The `--source` argument is the
+parent directory (e.g. `.claude/skills/rubber-duck`), not the SKILL.md file.
+Resolve to an absolute path. If none found, list all four checked paths and
+stop.
+
+**2. Pre-flight: check the repo destination.**
+
+Check whether `public/skills/<skill>` already exists in the skills-hub repo.
+If it does, warn the user and ask for confirmation. If confirmed, remove the
+existing directory before proceeding. If declined, stop.
+
+Optionally run inventory for catalog awareness:
+
+```bash
+python scripts/manage_cowork_skills.py inventory --names <skill> --json
+```
+
+If inventory returns a blocked catalog, log that catalog verification was
+skipped (absorb is a local-to-repo operation) and proceed. The local directory
+check above is the authoritative conflict guard.
+
+**3. Determine license.** Check the source directory for a `LICENSE` or
+`LICENSE.md` file. If found, use its SPDX identifier. If not found, default
+to `MIT`.
+
+**4. Run absorb.**
+
+```bash
+python scripts/manage_cowork_skills.py absorb --source <absolute-path> --name <skill> --license <license>
+```
+
+On failure, report the exact error and stop. On success, show the destination
+path (`public/skills/<skill>`).
+
+**5. Offer GitHub PR.** Ask the user whether to create a PR:
+
+```bash
+python scripts/manage_cowork_skills.py absorb --source <absolute-path> --name <skill> --license <license> --github-pr
+```
+
+`GITHUB_TOKEN` is required with `contents:write` and `pull-requests:write`
+scopes. This re-reads from the original `--source` and uploads to GitHub
+directly. On success, report the PR URL.
+
+If the user declines, remind them to commit and push manually.
+
+**6. Errors.**
+
+- `source skill directory not found` — resolved path missing.
+- `source has no SKILL.md` — no SKILL.md in directory.
+- `target skill already exists` — `public/skills/<skill>` not cleared first.
+- `target skill already exists on main` — skill exists on remote (PR path).
+- `GITHUB_TOKEN is required` — env var missing (PR path).
+- `could not find skills-hub repo root` — not running from skills-hub repo.
 
 ## Blocked catalog
 

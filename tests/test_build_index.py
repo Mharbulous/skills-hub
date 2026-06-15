@@ -416,14 +416,17 @@ def test_cowork_package_contains_stub_and_fetcher(tmp_public):
     assert "skills-hub-from-text.md" not in skill_md
 
 
-def test_skills_hub_skill_advertises_only_v1_control_panel_verbs():
+def test_skills_hub_skill_advertises_control_panel_verbs():
     text = (ROOT / "public" / "skills" / "skills-hub" / "SKILL.md").read_text(encoding="utf-8")
     frontmatter = text.split("---", 2)[1]
 
     assert "/skills-hub inventory" in text
     assert "/skills-hub install <skill>" in text
+    assert "- /skills-hub update\n" in text
     assert "/skills-hub update <skill>" in text
     assert "/skills-hub update all" in text
+    assert "/skills-hub absorb <skill>" in text
+    assert "absorb" in frontmatter.lower()
     assert "assimilate" not in frontmatter.lower()
     assert "assimilate" not in text.lower()
 

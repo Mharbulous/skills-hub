@@ -39,9 +39,10 @@ no fetching.
 
 ### Expected
 
-The response must contain all four of these command references:
+The response must contain all five of these command references:
 - `/skills-hub inventory`
 - `/skills-hub install <skill>`
+- `/skills-hub update`
 - `/skills-hub update <skill>`
 - `/skills-hub update all`
 
@@ -54,7 +55,7 @@ The response must contain all four of these command references:
 ### Checkpoint
 
 Ask the tester: *"Did the bare `/skills-hub` command show a help/status panel
-listing the four commands above, without fetching any remote data?"*
+listing the five commands above, without fetching any remote data?"*
 
 Record: PASS or FAIL with details.
 

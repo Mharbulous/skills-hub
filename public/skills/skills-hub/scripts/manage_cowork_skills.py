@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manage Cowork-facing Skills-hub installs and assimilation."""
+"""Manage Cowork-facing Skills-hub installs and absorption."""
 
 from __future__ import annotations
 
@@ -723,7 +723,7 @@ def provenance_text(source: Path, license_value: str) -> str:
             "",
             f"- Source: `{source}`",
             f"- License: {license_value}",
-            f"- Assimilated: {datetime.now(timezone.utc).isoformat()}",
+            f"- Absorbed: {datetime.now(timezone.utc).isoformat()}",
             "",
         ]
     )
@@ -783,14 +783,14 @@ def github_request(method: str, path: str, token: str, data: dict | None = None,
     return status, json.loads(response_body.decode("utf-8"))
 
 
-def cmd_assimilate_github_pr(args, source: Path, name: str) -> None:
+def cmd_absorb_github_pr(args, source: Path, name: str) -> None:
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         fail("GITHUB_TOKEN is required for --github-pr with contents:write and pull-requests:write access")
     owner, repo = validate_repo(args.repo)
     repo_path = f"/repos/{owner}/{repo}"
     target_path = f"public/skills/{name}"
-    branch = f"skills-hub/assimilate-{name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    branch = f"skills-hub/absorb-{name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
     github_request("GET", repo_path, token)
     status, _ = github_request(
@@ -826,7 +826,7 @@ def cmd_assimilate_github_pr(args, source: Path, name: str) -> None:
         f"{repo_path}/pulls",
         token,
         {
-            "title": f"Assimilate {name}",
+            "title": f"Absorb {name}",
             "head": branch,
             "base": args.base,
             "body": f"Adds `{name}` to Skills-hub.\n\nSource: `{source}`\nLicense: {args.license}\n",
@@ -836,7 +836,7 @@ def cmd_assimilate_github_pr(args, source: Path, name: str) -> None:
     print(pr.get("html_url", ""))
 
 
-def cmd_assimilate(args) -> None:
+def cmd_absorb(args) -> None:
     source = args.source.resolve()
     if not source.is_dir():
         fail(f"source skill directory not found: {source}")
@@ -844,7 +844,7 @@ def cmd_assimilate(args) -> None:
     if not (source / "SKILL.md").is_file():
         fail(f"source has no SKILL.md: {source}")
     if getattr(args, "github_pr", False):
-        cmd_assimilate_github_pr(args, source, name)
+        cmd_absorb_github_pr(args, source, name)
         return
 
     repo_root = find_repo_root()
@@ -892,14 +892,14 @@ def main() -> None:
     decode_package.add_argument("--json", action="store_true")
     decode_package.set_defaults(func=cmd_decode_package)
 
-    assimilate = sub.add_parser("assimilate")
-    assimilate.add_argument("--source", type=Path, required=True)
-    assimilate.add_argument("--name")
-    assimilate.add_argument("--license", default="unknown")
-    assimilate.add_argument("--github-pr", action="store_true")
-    assimilate.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
-    assimilate.add_argument("--base", default="main")
-    assimilate.set_defaults(func=cmd_assimilate)
+    absorb = sub.add_parser("absorb")
+    absorb.add_argument("--source", type=Path, required=True)
+    absorb.add_argument("--name")
+    absorb.add_argument("--license", default="unknown")
+    absorb.add_argument("--github-pr", action="store_true")
+    absorb.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
+    absorb.add_argument("--base", default="main")
+    absorb.set_defaults(func=cmd_absorb)
 
     args = parser.parse_args()
     args.func(args)

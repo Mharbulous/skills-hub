@@ -18,9 +18,10 @@ Report which preconditions passed and which need action. Stop if the plugin isn'
 
 ## Phase 1: Bare Command
 
-Run `/skills-hub`. Verify the response shows local help listing these four commands and does NOT fetch any remote data or run the management script:
+Run `/skills-hub`. Verify the response shows local help listing these five commands and does NOT fetch any remote data or run the management script:
 - `/skills-hub inventory`
 - `/skills-hub install <skill>`
+- `/skills-hub update`
 - `/skills-hub update <skill>`
 - `/skills-hub update all`
 

@@ -627,7 +627,7 @@ def test_decode_package_json_works_from_text_artifacts(tmp_path, capsys):
     assert result["b64_url"] == "https://skills-hub.web.app/cowork/skill-packages/alpha.skill.b64.txt"
 
 
-def test_assimilate_writes_source_and_provenance(tmp_path, monkeypatch):
+def test_absorb_writes_source_and_provenance(tmp_path, monkeypatch):
     manager = load_manager()
     repo = tmp_path / "repo"
     (repo / "public" / "skills").mkdir(parents=True)
@@ -640,7 +640,7 @@ def test_assimilate_writes_source_and_provenance(tmp_path, monkeypatch):
     (source / "__pycache__" / "x.pyc").write_bytes(b"cache")
     monkeypatch.chdir(repo)
 
-    manager.cmd_assimilate(SimpleNamespace(source=source, name="imported-skill", license="internal", github_pr=False))
+    manager.cmd_absorb(SimpleNamespace(source=source, name="imported-skill", license="internal", github_pr=False))
 
     dest = repo / "public" / "skills" / "imported-skill"
     assert (dest / "SKILL.md").is_file()
@@ -648,7 +648,7 @@ def test_assimilate_writes_source_and_provenance(tmp_path, monkeypatch):
     assert not (dest / "__pycache__").exists()
 
 
-def test_assimilate_blocks_name_conflict(tmp_path, monkeypatch):
+def test_absorb_blocks_name_conflict(tmp_path, monkeypatch):
     manager = load_manager()
     repo = tmp_path / "repo"
     (repo / "public" / "skills" / "existing").mkdir(parents=True)
@@ -660,10 +660,10 @@ def test_assimilate_blocks_name_conflict(tmp_path, monkeypatch):
     monkeypatch.chdir(repo)
 
     with pytest.raises(SystemExit):
-        manager.cmd_assimilate(SimpleNamespace(source=source, name="existing", license="unknown", github_pr=False))
+        manager.cmd_absorb(SimpleNamespace(source=source, name="existing", license="unknown", github_pr=False))
 
 
-def test_assimilate_github_pr_uploads_selected_files(tmp_path, monkeypatch, capsys):
+def test_absorb_github_pr_uploads_selected_files(tmp_path, monkeypatch, capsys):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -693,7 +693,7 @@ def test_assimilate_github_pr_uploads_selected_files(tmp_path, monkeypatch, caps
 
     monkeypatch.setattr(manager, "github_request", fake_github_request)
 
-    manager.cmd_assimilate(
+    manager.cmd_absorb(
         SimpleNamespace(
             source=source,
             name="imported-skill",
@@ -711,7 +711,7 @@ def test_assimilate_github_pr_uploads_selected_files(tmp_path, monkeypatch, caps
     assert not any(".secret" in path or "__pycache__" in path or path.endswith(".skill") for path in uploaded_paths)
 
 
-def test_assimilate_github_pr_requires_token(tmp_path, monkeypatch):
+def test_absorb_github_pr_requires_token(tmp_path, monkeypatch):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -719,7 +719,7 @@ def test_assimilate_github_pr_requires_token(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
 
     with pytest.raises(SystemExit):
-        manager.cmd_assimilate(
+        manager.cmd_absorb(
             SimpleNamespace(
                 source=source,
                 name="imported-skill",
@@ -731,7 +731,7 @@ def test_assimilate_github_pr_requires_token(tmp_path, monkeypatch):
         )
 
 
-def test_assimilate_github_pr_blocks_existing_target(tmp_path, monkeypatch):
+def test_absorb_github_pr_blocks_existing_target(tmp_path, monkeypatch):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -748,7 +748,7 @@ def test_assimilate_github_pr_blocks_existing_target(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "github_request", fake_github_request)
 
     with pytest.raises(SystemExit):
-        manager.cmd_assimilate(
+        manager.cmd_absorb(
             SimpleNamespace(
                 source=source,
                 name="imported-skill",
@@ -760,7 +760,7 @@ def test_assimilate_github_pr_blocks_existing_target(tmp_path, monkeypatch):
         )
 
 
-def test_assimilate_github_pr_surfaces_api_failure(tmp_path, monkeypatch):
+def test_absorb_github_pr_surfaces_api_failure(tmp_path, monkeypatch):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -773,7 +773,7 @@ def test_assimilate_github_pr_surfaces_api_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "github_request", fake_github_request)
 
     with pytest.raises(SystemExit):
-        manager.cmd_assimilate(
+        manager.cmd_absorb(
             SimpleNamespace(
                 source=source,
                 name="imported-skill",
