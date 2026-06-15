@@ -132,16 +132,20 @@ freshness, size, and SHA-256 checks pass.
 
 ### `/skills-hub update`
 
-Bootstrap self-update for the skills-hub skill itself. This is the only update
-path for skills-hub because it is delivered via the plugin mechanism and does
-not appear as `stale-wrapper` in inventory.
+Update the skills-hub skill itself. If the user types `/skills-hub update` with
+no arguments, always treat it as this self-update command. Do not prompt for a
+skill name and do not fall through to `/skills-hub update all`.
 
-**Disambiguation:** If the user types `/skills-hub update` with no arguments,
-always treat it as this self-update command. Do not prompt for a skill name and
-do not fall through to `/skills-hub update all`.
+Offer both update paths:
 
-Do not run inventory first. Skip the stale-wrapper check and go straight to
-fetch-package:
+**Path 1 — Plugin update (recommended).** Direct the user to
+**Customize > Plugins > Skills hub** and click the **Update** button. This pulls
+the latest version from the source repository. If the button is greyed out, the
+plugin is already up to date. Changes take effect on the next Cowork session.
+
+**Path 2 — Fetch-package fallback.** If the plugin Update button is unavailable
+or the user prefers this path, fetch the skills-hub package directly. Do not run
+inventory first — skip the stale-wrapper check and go straight to fetch-package:
 
 ```bash
 python scripts/manage_cowork_skills.py fetch-package skills-hub --output-dir <writable dir> --json
@@ -151,12 +155,12 @@ On success, present the returned `package_path` with `mcp__cowork__present_files
 as a Save-skill card. Tell the user to click **Save skill**. Changes take effect
 on the next Cowork session.
 
-After saving, the user will have both the plugin-delivered copy and the new
+After saving via Path 2, the user will have both the plugin-delivered copy and a
 resolver-wrapper copy of skills-hub. The resolver-wrapper copy takes precedence.
 On the next `/skills-hub inventory`, skills-hub may show `conflict` status —
 this is expected and benign.
 
-**Errors:**
+**Errors (Path 2 only):**
 
 - Network / blocked catalog: `could not download signed manifest from ...` —
   tell the user to check that `skills-hub.web.app` is on the sandbox network
