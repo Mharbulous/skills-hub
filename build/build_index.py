@@ -113,7 +113,7 @@ IGNORED_SUFFIXES = {".pyc", ".pyo"}
 BOOTSTRAP_FILES = ["decode-package.py", "skills-hub-from-text.md"]
 ROOT_INSTALL_PROMPT = f"Install {BASE_URL}"
 ROOT_INDEX = PUBLIC / "index.html"
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.2.0"
 PLUGIN_DESCRIPTION = "Install and manage Skills-hub skills from the public GitHub repo in Claude Cowork."
 PLUGIN_KEYWORDS = [
     "skills-hub",

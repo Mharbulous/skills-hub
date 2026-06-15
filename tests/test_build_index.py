@@ -358,7 +358,7 @@ def assert_plugin_tree(plugin_root):
     files = {path.relative_to(plugin_root).as_posix() for path in plugin_root.rglob("*") if path.is_file()}
 
     assert plugin_json["name"] == "skills-hub"
-    assert plugin_json["version"] == "0.1.0"
+    assert plugin_json["version"] == "0.2.0"
     assert plugin_json["skills"] == "./skills"
     assert "install skills hub" in plugin_json["keywords"]
     assert files == {
