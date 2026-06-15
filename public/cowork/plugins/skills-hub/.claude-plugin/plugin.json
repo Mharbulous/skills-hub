@@ -1,0 +1,18 @@
+{
+  "name": "skills-hub",
+  "version": "0.2.0",
+  "description": "Install and manage Skills-hub skills from the public GitHub repo in Claude Cowork.",
+  "author": {
+    "name": "Skills-hub"
+  },
+  "homepage": "https://github.com/Mharbulous/skills-hub.git",
+  "keywords": [
+    "skills-hub",
+    "skills hub",
+    "install skills hub",
+    "cowork skills",
+    "github skills",
+    "public skills repo"
+  ],
+  "skills": "./skills"
+}

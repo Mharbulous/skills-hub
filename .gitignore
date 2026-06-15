@@ -1,6 +1,10 @@
 public/claude/
 public/codex/
-public/cowork/
+public/cowork/*
+!public/cowork/plugins/
+public/cowork/plugins/*
+!public/cowork/plugins/skills-hub/
+!public/cowork/plugins/skills-hub/**
 public/index.json
 public/manifest.json
 public/manifest.json.sig
