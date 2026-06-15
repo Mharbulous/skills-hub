@@ -2,7 +2,7 @@
 # Install Skills-hub skills into a Codex environment.
 #
 # Usage:
-#   SKILLS_BASE_URL="https://skills-hub.web.app" ./codex-setup.sh [dest]
+#   SKILLS_BASE_URL="https://mharbulous.github.io/skills-hub" ./codex-setup.sh [dest]
 
 set -euo pipefail
 PATH="/usr/bin:/bin:$PATH"
@@ -49,7 +49,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 PYTHON_BIN="$(find_python)"
-BASE_URL="${SKILLS_BASE_URL:?Set SKILLS_BASE_URL to https://skills-hub.web.app}"
+BASE_URL="${SKILLS_BASE_URL:?Set SKILLS_BASE_URL to https://mharbulous.github.io/skills-hub}"
 BASE_URL="${BASE_URL%/}"
 DEST="${DEST:-$DEFAULT_DEST}"
 MARKER="$DEST/.skills-hub-managed-skills"

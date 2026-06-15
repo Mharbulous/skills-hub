@@ -16,8 +16,8 @@ which precondition is unmet.
    repository before continuing.
 2. **Fresh chat.** This test must run in a new Cowork chat so the skill is
    loaded from scratch.
-3. **Network access.** `skills-hub.web.app` is reachable. Test with a quick
-   fetch of `https://skills-hub.web.app/manifest.json` — a 200 response
+3. **Network access.** `mharbulous.github.io/skills-hub` is reachable. Test with a quick
+   fetch of `https://mharbulous.github.io/skills-hub/manifest.json` — a 200 response
    confirms connectivity. If it fails, note this and plan to test degraded-mode
    inventory (Phase 2b) instead of the normal flow.
 4. **ssh-keygen available.** Run `ssh-keygen -h` to confirm it is on PATH.
@@ -64,7 +64,7 @@ Record: PASS or FAIL with details.
 ## Phase 2: Inventory
 
 **Goal:** `/skills-hub inventory` runs the management script, contacts
-`skills-hub.web.app` for a signed manifest, and reports each cataloged skill
+`mharbulous.github.io/skills-hub` for a signed manifest, and reports each cataloged skill
 with a status.
 
 ### Steps
@@ -290,7 +290,7 @@ This sub-phase tests degraded mode. Skip if network was already down during
 Phase 2.
 
 1. If possible, disconnect from the network or ask the tester to temporarily
-   block `skills-hub.web.app`.
+   block `mharbulous.github.io/skills-hub`.
 2. Run `/skills-hub inventory`.
 3. Expect a blocked-catalog JSON object with a clear `error` field.
 4. Run `/skills-hub install <any-skill>`.

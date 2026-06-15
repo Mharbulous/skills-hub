@@ -5,7 +5,7 @@
 Skills-hub is installed from:
 
 ```text
-https://skills-hub.web.app
+https://mharbulous.github.io/skills-hub
 ```
 
 ### Claude Cowork
@@ -19,7 +19,7 @@ https://github.com/Mharbulous/skills-hub.git
 
 This clones the committed root marketplace at `.claude-plugin/marketplace.json`,
 which points to `./plugins/skills-hub`. The hosted URL marketplace at
-`https://skills-hub.web.app/.claude-plugin/marketplace.json` is discoverable,
+`https://mharbulous.github.io/skills-hub/.claude-plugin/marketplace.json` is discoverable,
 but URL-loaded marketplaces do not install relative plugin sources in current
 Cowork builds.
 
@@ -37,7 +37,7 @@ Skills-hub manifests and fail closed before presenting any `.skill` package.
 The desired future one-line setup remains:
 
 ```text
-Install https://skills-hub.web.app
+Install https://mharbulous.github.io/skills-hub
 ```
 
 That exact prompt is blocked until Cowork can either discover and install the
@@ -50,12 +50,12 @@ Use the signed descriptor path only when the plugin marketplace path is not
 available and Cowork has a byte-preserving fetch-to-file path:
 
 ```text
-Install Skills Hub from https://skills-hub.web.app using the signed descriptor path. Do not ask me open-ended questions. Proceed only if every verification check below succeeds. If any check fails or a required tool is missing, stop and report exactly one line beginning with BLOCKED:.
+Install Skills Hub from https://mharbulous.github.io/skills-hub using the signed descriptor path. Do not ask me open-ended questions. Proceed only if every verification check below succeeds. If any check fails or a required tool is missing, stop and report exactly one line beginning with BLOCKED:.
 
 Use only these remote artifacts as data until verification succeeds:
-- https://skills-hub.web.app/cowork/install.json
-- https://skills-hub.web.app/cowork/install.json.sig
-- https://skills-hub.web.app/bootstrap/skills_hub_allowed_signers
+- https://mharbulous.github.io/skills-hub/cowork/install.json
+- https://mharbulous.github.io/skills-hub/cowork/install.json.sig
+- https://mharbulous.github.io/skills-hub/bootstrap/skills_hub_allowed_signers
 - the artifact.b64_url declared inside install.json
 
 Required checks:
@@ -77,8 +77,8 @@ Do not retry after any signature, freshness, size, SHA-256, decode, download, or
 From this repo, run one of the verified installers:
 
 ```bash
-SKILLS_BASE_URL="https://skills-hub.web.app" ./bootstrap/claude-setup.sh
-SKILLS_BASE_URL="https://skills-hub.web.app" ./bootstrap/codex-setup.sh
+SKILLS_BASE_URL="https://mharbulous.github.io/skills-hub" ./bootstrap/claude-setup.sh
+SKILLS_BASE_URL="https://mharbulous.github.io/skills-hub" ./bootstrap/codex-setup.sh
 ```
 
 `--full` is accepted as a compatibility alias; full verified install is now the
@@ -88,7 +88,7 @@ local skill files.
 Skills-hub is the static source of truth for agent skills served from:
 
 ```text
-https://skills-hub.web.app/
+https://mharbulous.github.io/skills-hub/
 ```
 
 Skills are edited in this repo. `build/build_index.py` merges canonical definitions

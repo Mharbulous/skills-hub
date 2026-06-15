@@ -15,7 +15,7 @@ that build. Do not package Skills-hub skills from a product repository, do not
 overwrite unrelated `.skill` files as a presentation workaround, and do not
 document runtime cache edits as the delivery path.
 
-If the change needs to be effective on `https://skills-hub.web.app`, use the
+If the change needs to be effective on `https://mharbulous.github.io/skills-hub`, use the
 signed publish path for the repo instead of a local package handoff.
 
 ## Standalone Packaging

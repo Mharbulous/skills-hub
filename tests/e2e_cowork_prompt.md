@@ -11,7 +11,7 @@ Track results as you go using this format: **Phase N: PASS/FAIL/SKIP — notes**
 ## Preconditions — verify these first
 
 1. Confirm the `skills-hub` plugin is loaded (you should have the `/skills-hub` skill available).
-2. Test network access by fetching `https://skills-hub.web.app/manifest.json`. Note if this fails — you'll test degraded mode instead.
+2. Test network access by fetching `https://mharbulous.github.io/skills-hub/manifest.json`. Note if this fails — you'll test degraded mode instead.
 3. Confirm `ssh-keygen` is on PATH by running `ssh-keygen -h`.
 
 Report which preconditions passed and which need action. Stop if the plugin isn't installed.
@@ -83,7 +83,7 @@ Tell me to click Save on each card. Then verify all updated skills show `current
 
 ### 6b — Pick a `current` skill and run `/skills-hub update <that-skill>`. It must refuse because the skill is not stale.
 
-### 6c — Blocked catalog (skip if network was already down in Phase 2). Ask me to temporarily disconnect from the network or block `skills-hub.web.app`. Then:
+### 6c — Blocked catalog (skip if network was already down in Phase 2). Ask me to temporarily disconnect from the network or block `mharbulous.github.io/skills-hub`. Then:
 - Run `/skills-hub inventory` — expect blocked-catalog response.
 - Run `/skills-hub install <any-skill>` — expect refusal.
 - Remind me to restore network access.

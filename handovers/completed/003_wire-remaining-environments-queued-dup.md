@@ -45,7 +45,7 @@ Verification done:
 - Local manifest signature verified with `ssh-keygen -Y verify`.
 - Live `manifest.json`, `manifest.json.sig`, `index.json`, trust anchor, selected stubs, selected full skills, full bundles, and selected per-skill tarballs returned HTTP 200 and byte-matched fresh local `dist`.
 - Live-downloaded `claude/skills.tar.gz`, `codex/skills.tar.gz`, and `cowork/skills/handover.tar.gz` verified against the live manifest with `bootstrap\skills_hub_verify.py`.
-- `python bootstrap\skills-hub-fetch.py cowork handover --base-url https://skills-hub.web.app ...` materialized a verified local cache path and printed only that path.
+- `python bootstrap\skills-hub-fetch.py cowork handover --base-url https://mharbulous.github.io/skills-hub ...` materialized a verified local cache path and printed only that path.
 - Claude and Codex setup scripts installed verified full bundles from live Firebase into temp destinations; `review-plan` was full local content and `claude-md-optimizer` included `reference/` and `templates/`.
 - Replaced real POC-installed unsafe stubs in Claude, Codex, Coclerk, and 4 Cowork runtime paths; backups are in `C:\Users\Brahm\skills-hub-poc-backups\signed-delivery-20260612-120405\`.
 - Coclerk `handover.skill` zip now has forward-slash entries: `handover/SKILL.md`, `handover/skills-hub-fetch.py`, and `handover/skills_hub_allowed_signers`; inner `SKILL.md` byte-matches `dist\cowork\stubs\handover\SKILL.md`.
@@ -103,7 +103,7 @@ Three one-skill Skills-hub stub installs were attempted:
 
 ## Important Findings
 
-- Full rollout is no-go until the stub trust model is adjusted for Claude Code desktop. A new Claude Code session registered `review-plan`, read the stub, and refused to fetch `https://skills-hub.web.app/claude/skills/review-plan/SKILL.md` as a suspected remote-instruction prompt injection.
+- Full rollout is no-go until the stub trust model is adjusted for Claude Code desktop. A new Claude Code session registered `review-plan`, read the stub, and refused to fetch `https://mharbulous.github.io/skills-hub/claude/skills/review-plan/SKILL.md` as a suspected remote-instruction prompt injection.
 - The old `/review-plan` command no longer shadows the skill: `review-plan.md` is absent and `review-plan.md.disabled` is present.
 - `codex.exe --help` fails with Access denied even when rerun outside the sandbox, so Codex runtime smoke could not be automated from this thread.
 - No Claude Cowork session-control tool was available in this Codex thread, so Cowork runtime fetch behavior still needs manual verification.

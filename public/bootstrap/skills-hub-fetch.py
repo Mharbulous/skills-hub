@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-BASE_URL = "https://skills-hub.web.app"
+BASE_URL = "https://mharbulous.github.io/skills-hub"
 MANIFEST_SCHEMA_VERSION = 3
 SIGNING_IDENTITY = "skills-hub-manifest"
 SIGNING_NAMESPACE = "skills-hub-manifest"

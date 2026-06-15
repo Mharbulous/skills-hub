@@ -11,7 +11,7 @@ key_files:
 
 ## Status
 
-All skill migrations complete. Firebase Hosting live at https://skills-hub.web.app/.
+All skill migrations complete. Firebase Hosting live at https://mharbulous.github.io/skills-hub/.
 
 **Completed:**
 - 001A: 21 Codex skills migrated (17 new + 3 overrides)
@@ -28,7 +28,7 @@ All skill migrations complete. Firebase Hosting live at https://skills-hub.web.a
 ## Architecture
 
 Canonical `SKILL.md` per skill + optional per-harness `overrides/{claude,codex,cowork}.md`
--> GitHub Action builds per-harness bundles -> Firebase Hosting at https://skills-hub.web.app/
+-> GitHub Action builds per-harness bundles -> Firebase Hosting at https://mharbulous.github.io/skills-hub/
 -> each environment pulls at session start (Cowork fetches at invocation).
 
 ## Build Output

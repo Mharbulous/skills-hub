@@ -12,7 +12,7 @@
       "description": "Install and manage verified Skills-hub resolver-wrapper skills in Claude Cowork.",
       "source": "./cowork/plugins/skills-hub",
       "category": "productivity",
-      "homepage": "https://skills-hub.web.app",
+      "homepage": "https://mharbulous.github.io/skills-hub",
       "keywords": [
         "skills-hub",
         "skills hub",

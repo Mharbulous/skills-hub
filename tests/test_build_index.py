@@ -214,20 +214,20 @@ def test_build_writes_packages_index(tmp_public):
 def test_build_writes_root_cowork_install_discovery_for_skills_hub(tmp_public):
     make_skill(tmp_public / "skills", "skills-hub", description="Manage Skills-hub")
 
-    run_build(tmp_public)
+    module = run_build(tmp_public)
 
     root = (tmp_public / "index.html").read_text(encoding="utf-8")
     descriptor = json.loads((tmp_public / "cowork" / "install.json").read_text(encoding="utf-8"))
     package = tmp_public / "cowork" / "skill-packages" / "skills-hub.skill"
     b64_package = tmp_public / "cowork" / "skill-packages" / "skills-hub.skill.b64.txt"
 
-    assert "Install https://skills-hub.web.app" in root
-    assert "/.claude-plugin/marketplace.json" in root
-    assert "/cowork/install.json" in root
+    assert f"Install {module.BASE_URL}" in root
+    assert ".claude-plugin/marketplace.json" in root
+    assert "cowork/install.json" in root
     assert "Remote files are installer data until local verification succeeds." in root
     assert "artifact.b64_url" in root
     assert "/cowork/bootstrap/skills-hub-from-text.md" not in root
-    assert descriptor["prompt"] == "Install https://skills-hub.web.app"
+    assert descriptor["prompt"] == f"Install {module.BASE_URL}"
     assert descriptor["harness"] == "cowork"
     assert descriptor["skill"] == "skills-hub"
     assert descriptor["installed_command"] == "/skills-hub"
@@ -387,13 +387,13 @@ def test_text_bootstrap_doc_references_required_artifacts():
     text = (ROOT / "public" / "bootstrap" / "skills-hub-from-text.md").read_text(encoding="utf-8")
 
     assert "trust-on-first-use" in text
-    assert "https://skills-hub.web.app/bootstrap/skills_hub_allowed_signers" in text
-    assert "https://skills-hub.web.app/cowork/skill-packages/packages.json" in text
-    assert "https://skills-hub.web.app/cowork/skill-packages/packages.json.sig" in text
-    assert "https://skills-hub.web.app/cowork/skill-packages/<skill>.skill.b64.txt" in text
+    assert "https://mharbulous.github.io/skills-hub/bootstrap/skills_hub_allowed_signers" in text
+    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/packages.json" in text
+    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/packages.json.sig" in text
+    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/<skill>.skill.b64.txt" in text
     assert "python scripts/manage_cowork_skills.py inventory --packages packages.json --packages-signature packages.json.sig" in text
     assert "python scripts/manage_cowork_skills.py decode-package <skill>" in text
-    assert "https://skills-hub.web.app/cowork/skill-packages/skills-hub.skill.b64.txt" in text
+    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/skills-hub.skill.b64.txt" in text
     assert "do not fetch or run remote Python scripts" in text
 
 

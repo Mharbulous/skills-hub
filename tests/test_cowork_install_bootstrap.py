@@ -52,7 +52,7 @@ def run_build(public_dir):
     make_skill(public_dir / "skills", "skills-hub")
     module = load_build_module(public_dir)
     module.main([])
-    return public_dir
+    return public_dir, module
 
 
 def sha256(path):
@@ -60,21 +60,21 @@ def sha256(path):
 
 
 def test_exact_prompt_root_discovery_targets_verified_skills_hub_package(tmp_path):
-    public = run_build(tmp_path / "public")
+    public, module = run_build(tmp_path / "public")
     root = (public / "index.html").read_text(encoding="utf-8")
     descriptor = json.loads((public / "cowork" / "install.json").read_text(encoding="utf-8"))
     package = public / descriptor["artifact"]["package_path"]
     b64_package = public / descriptor["artifact"]["b64_path"]
 
-    assert descriptor["prompt"] == "Install https://skills-hub.web.app"
+    assert descriptor["prompt"] == f"Install {module.BASE_URL}"
     assert descriptor["skill"] == "skills-hub"
     assert descriptor["installed_command"] == "/skills-hub"
-    assert "/cowork/install.json" in root
-    assert "/cowork/install.json.sig" in root
-    assert "/.claude-plugin/marketplace.json" in root
+    assert "cowork/install.json" in root
+    assert "cowork/install.json.sig" in root
+    assert ".claude-plugin/marketplace.json" in root
     assert "Remote files are installer data until local verification succeeds." in root
     assert "Add from a repository" in root
-    assert "https://github.com/Mharbulous/skills-hub.git" in root
+    assert module.GITHUB_REPO_URL in root
 
     assert package.is_file()
     assert package.stat().st_size == descriptor["artifact"]["package_size"]
@@ -99,7 +99,7 @@ def test_exact_prompt_root_discovery_targets_verified_skills_hub_package(tmp_pat
 
 
 def test_install_descriptor_requires_fail_closed_verification_steps(tmp_path):
-    public = run_build(tmp_path / "public")
+    public, _module = run_build(tmp_path / "public")
     descriptor = json.loads((public / "cowork" / "install.json").read_text(encoding="utf-8"))
     checks = "\n".join(descriptor["verification"]["required_checks"])
 

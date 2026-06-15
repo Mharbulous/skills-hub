@@ -48,7 +48,7 @@ hosted root URL or resolving hosted marketplace relative sources.
 2. Send:
 
    ```text
-   Install https://skills-hub.web.app
+   Install https://mharbulous.github.io/skills-hub
    ```
 
 3. Cowork should present the `skills-hub` plugin card without using the
@@ -59,7 +59,7 @@ hosted root URL or resolving hosted marketplace relative sources.
 Use this only when testing the fallback path from `README.md` under
 `Setup > Claude Cowork > Descriptor Fallback`.
 
-- Cowork discovers `https://skills-hub.web.app/cowork/install.json` from the root URL.
+- Cowork discovers `https://mharbulous.github.io/skills-hub/cowork/install.json` from the root URL.
 - Cowork verifies `cowork/install.json.sig` with `bootstrap/skills_hub_allowed_signers`.
 - Cowork fetches the descriptor's `artifact.b64_url` as exact text only if it
   has a byte-preserving fetch-to-file path.

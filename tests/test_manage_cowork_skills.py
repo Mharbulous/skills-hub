@@ -95,7 +95,7 @@ def write_signed_packages(base_dir, key, package_data=b"package"):
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "max_age_seconds": 3600,
-        "base_url": "https://skills-hub.web.app",
+        "base_url": "https://mharbulous.github.io/skills-hub",
         "packages": [
             {
                 "name": "alpha",
@@ -125,7 +125,7 @@ def write_signed_packages_index(base_dir, key, names):
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "max_age_seconds": 3600,
-        "base_url": "https://skills-hub.web.app",
+        "base_url": "https://mharbulous.github.io/skills-hub",
         "packages": [
             {
                 "name": name,
@@ -623,8 +623,8 @@ def test_decode_package_json_works_from_text_artifacts(tmp_path, capsys):
 
     result = json.loads(capsys.readouterr().out)
     assert Path(result["package_path"]).read_bytes() == b"package"
-    assert result["package_url"] == "https://skills-hub.web.app/cowork/skill-packages/alpha.skill"
-    assert result["b64_url"] == "https://skills-hub.web.app/cowork/skill-packages/alpha.skill.b64.txt"
+    assert result["package_url"] == "https://mharbulous.github.io/skills-hub/cowork/skill-packages/alpha.skill"
+    assert result["b64_url"] == "https://mharbulous.github.io/skills-hub/cowork/skill-packages/alpha.skill.b64.txt"
 
 
 def test_absorb_writes_source_and_provenance(tmp_path, monkeypatch):

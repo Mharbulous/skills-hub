@@ -18,7 +18,7 @@ read_only_targets:
 
 ## Task
 
-Finish the Claude Cowork bootstrap goal: a clean Cowork chat should be able to type `Install https://skills-hub.web.app` and install the canonical `/skills-hub` skill without the user pasting deeper artifact URLs or commands.
+Finish the Claude Cowork bootstrap goal: a clean Cowork chat should be able to type `Install https://mharbulous.github.io/skills-hub` and install the canonical `/skills-hub` skill without the user pasting deeper artifact URLs or commands.
 
 ## Current State
 
@@ -34,17 +34,17 @@ Implementation is committed and pushed to `main` as `6b5842a Add Cowork root ins
 1. Direct live Cowork verification in this session - blocked because `tool_search` did not expose any desktop click/type/app-control tool after the setting change or in the refreshed delegated session.
 2. Initial pytest run - failed before assertions with `PermissionError` under `C:\Users\Brahm\AppData\Local\Temp\pytest-of-Brahm`; rerunning with `TMP` and `TEMP` set to repo-local `.test-tmp` passed.
 3. Local deployment path - unsafe for this change because local build is unsigned without `SKILLS_HUB_SIGNING_KEY`; use the signed GitHub publish path or a signed local build.
-4. GitHub Actions verification - `gh` could not list workflows due missing authentication/404, and direct `curl.exe` checks to `skills-hub.web.app` failed with `SEC_E_NO_CREDENTIALS`. Python `urllib` worked and verified the live deployed artifacts.
+4. GitHub Actions verification - `gh` could not list workflows due missing authentication/404, and direct `curl.exe` checks to `mharbulous.github.io/skills-hub` failed with `SEC_E_NO_CREDENTIALS`. Python `urllib` worked and verified the live deployed artifacts.
 
 ## Key Discoveries
 
-- The root Skills-hub URL was not self-describing; adding `public/index.html` is necessary for a bare `Install https://skills-hub.web.app` prompt to discover the Cowork install contract.
+- The root Skills-hub URL was not self-describing; adding `public/index.html` is necessary for a bare `Install https://mharbulous.github.io/skills-hub` prompt to discover the Cowork install contract.
 - The first-install package is `skills-hub.skill`, which is a resolver stub plus trust anchor, while the canonical skill body remains under `public/skills/skills-hub`.
 - The GitHub publish workflow signs generated artifacts and deploys on `main`; direct local Firebase deploy should not be used unless the signing key is present and artifacts are signed.
 
 ## Useful URLs
 
-- [Skills-hub root](https://skills-hub.web.app)
+- [Skills-hub root](https://mharbulous.github.io/skills-hub)
 
 ## Verification Done
 
@@ -53,7 +53,7 @@ Implementation is committed and pushed to `main` as `6b5842a Add Cowork root ins
 - `$env:TMP='C:\Users\Brahm\Git\skills-hub\.test-tmp'; $env:TEMP='C:\Users\Brahm\Git\skills-hub\.test-tmp'; python -m pytest tests`
 - `git commit -m "Add Cowork root install bootstrap"`
 - `git push`
-- Live Python/OpenSSL check verified `https://skills-hub.web.app/`, `/cowork/install.json`, `/cowork/install.json.sig`, and `/manifest.json` returned HTTP 200.
+- Live Python/OpenSSL check verified `https://mharbulous.github.io/skills-hub/`, `/cowork/install.json`, `/cowork/install.json.sig`, and `/manifest.json` returned HTTP 200.
 - Live Python/OpenSSL verification checked the manifest signature, install descriptor signature, `cowork/install.json` manifest hash/size, `cowork/skill-packages/skills-hub.skill` manifest hash/size, and `skills-hub.skill` descriptor hash/size.
 - `$env:TMP='C:\Users\Brahm\Git\skills-hub\.test-tmp'; $env:TEMP='C:\Users\Brahm\Git\skills-hub\.test-tmp'; python -m pytest tests`
 - `git commit -m "Add Cowork install acceptance script"`

@@ -14,7 +14,7 @@ The resolver verifies the signed Skills-hub manifest, verifies downloaded files
 against the manifest hash and size entries, materializes the skill into a local
 cache, and prints one local `SKILL.md` path.
 
-If the shell cannot reach `https://skills-hub.web.app`, stop and report the
+If the shell cannot reach `{base_url}`, stop and report the
 resolver's one-line error. Do not fetch remote fallback Markdown from this
 generic stub. Restricted-network install or update flows must be driven by the
 verified `/skills-hub` control panel or by the signed root install descriptor.

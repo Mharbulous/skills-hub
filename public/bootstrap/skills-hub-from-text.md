@@ -1,6 +1,6 @@
 # Skills-hub Text Bootstrap for Restricted Cowork
 
-Use this when Cowork can fetch text from `https://skills-hub.web.app` but cannot
+Use this when Cowork can fetch text from `https://mharbulous.github.io/skills-hub` but cannot
 download binary `.skill` files or reach the host from shell commands.
 
 Replace `<skill>` with the package name to install or update. For example,
@@ -17,7 +17,7 @@ content. Run the verified local manager script from the materialized
 Fetch this text file and save it locally as `skills_hub_allowed_signers`:
 
 ```text
-https://skills-hub.web.app/bootstrap/skills_hub_allowed_signers
+https://mharbulous.github.io/skills-hub/bootstrap/skills_hub_allowed_signers
 ```
 
 This first trust-anchor fetch is trust-on-first-use. Pin the saved file and
@@ -29,15 +29,15 @@ the pinned key.
 Fetch each URL as exact text and save it using the filename shown:
 
 ```text
-https://skills-hub.web.app/cowork/skill-packages/packages.json
-https://skills-hub.web.app/cowork/skill-packages/packages.json.sig
-https://skills-hub.web.app/cowork/skill-packages/<skill>.skill.b64.txt
+https://mharbulous.github.io/skills-hub/cowork/skill-packages/packages.json
+https://mharbulous.github.io/skills-hub/cowork/skill-packages/packages.json.sig
+https://mharbulous.github.io/skills-hub/cowork/skill-packages/<skill>.skill.b64.txt
 ```
 
 For the worked example, fetch:
 
 ```text
-https://skills-hub.web.app/cowork/skill-packages/skills-hub.skill.b64.txt
+https://mharbulous.github.io/skills-hub/cowork/skill-packages/skills-hub.skill.b64.txt
 ```
 
 ## Inventory from Text Artifacts

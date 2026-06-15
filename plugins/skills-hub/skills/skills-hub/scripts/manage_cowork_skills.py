@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-BASE_URL = "https://skills-hub.web.app"
+BASE_URL = "https://mharbulous.github.io/skills-hub"
 DEFAULT_GITHUB_REPO = "Mharbulous/skills-hub"
 CONTEXT_FILE = ".skills-hub-context.json"
 PACKAGES_SCHEMA_VERSION = 1

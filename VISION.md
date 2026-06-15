@@ -32,7 +32,7 @@ stable once owner-reviewed.
 Skills-hub is the static, signed, unauthenticated source of truth for
 agent skill delivery across Claude, Codex, and Cowork. It replaces local
 repo-backed skill distribution: harnesses may consume generated files from this
-repo or from the deployed `skills-hub.web.app` artifacts, but they must not
+repo or from the deployed `mharbulous.github.io/skills-hub` artifacts, but they must not
 depend on Coclerk or any other product repo as a packaging source.
 
 ### Design Principles
@@ -60,7 +60,7 @@ depend on Coclerk or any other product repo as a packaging source.
 ### Litmus Test
 
 Can a new machine install or import the skill using only this repository's
-generated artifacts or the hosted `skills-hub.web.app` output, without reading any Coclerk
+generated artifacts or the hosted `mharbulous.github.io/skills-hub` output, without reading any Coclerk
 source, wrapper, or plugin package? If yes, the change belongs in Skills-hub. If
 no, the design is still coupled to the system Skills-hub is replacing.
 

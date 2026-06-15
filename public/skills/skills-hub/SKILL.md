@@ -62,12 +62,12 @@ Branch on the JSON shape:
   [Blocked catalog](#blocked-catalog) below. Do not install or update anything
   while the catalog is blocked.
 
-If Cowork's shell network path cannot reach `skills-hub.web.app` and the user
+If Cowork's shell network path cannot reach `mharbulous.github.io/skills-hub` and the user
 asks to debug or use the restricted text fallback, fetch the text artifacts
 listed at:
 
 ```text
-https://skills-hub.web.app/cowork/bootstrap/skills-hub-from-text.md
+https://mharbulous.github.io/skills-hub/cowork/bootstrap/skills-hub-from-text.md
 ```
 
 Then run inventory against the verified package index:
@@ -117,11 +117,11 @@ output folder. Present the returned `package_path` with
 click **Save skill** and rerun `/skills-hub inventory` for confirmation. Do not
 print a bare path as the normal import mechanism.
 
-If Cowork's shell network path cannot reach `skills-hub.web.app`, use the
+If Cowork's shell network path cannot reach `mharbulous.github.io/skills-hub`, use the
 restricted text workflow instead:
 
 ```text
-https://skills-hub.web.app/cowork/bootstrap/skills-hub-from-text.md
+https://mharbulous.github.io/skills-hub/cowork/bootstrap/skills-hub-from-text.md
 ```
 
 Use that page as a URL checklist and command guide for the requested skill.
@@ -163,7 +163,7 @@ this is expected and benign.
 **Errors (Path 2 only):**
 
 - Network / blocked catalog: `could not download signed manifest from ...` —
-  tell the user to check that `skills-hub.web.app` is on the sandbox network
+  tell the user to check that `mharbulous.github.io/skills-hub` is on the sandbox network
   allowlist and start a new session.
 - Skill not in catalog: `skill not found in catalog` — the skills-hub package
   is not published yet or the manifest is stale. Report plainly and stop.
@@ -277,7 +277,7 @@ just print the raw `catalog.error`. Instead:
 1. State plainly that the verified catalog is unavailable, and include
    `catalog.error` as the underlying reason.
 2. Give the user actionable next steps:
-   - Add `skills-hub.web.app` to the sandbox network allowlist, then start a new
+   - Add `mharbulous.github.io/skills-hub` to the sandbox network allowlist, then start a new
      Cowork session (network changes do not take effect mid-session).
    - Or use the restricted text-fallback workflow (the
      `skills-hub-from-text.md` page plus the `decode-package` subcommand) for the

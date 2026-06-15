@@ -49,7 +49,7 @@ def write_packages(base_dir, key, package_data=b"PK\x03\x04package", *, generate
         "schema_version": 1,
         "generated_at": (generated_at or datetime.now(timezone.utc)).isoformat(),
         "max_age_seconds": max_age_seconds,
-        "base_url": "https://skills-hub.web.app",
+        "base_url": "https://mharbulous.github.io/skills-hub",
         "packages": [
             {
                 "name": "alpha",
