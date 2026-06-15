@@ -37,46 +37,30 @@ Use this when Codex cannot directly control the Claude Cowork desktop app.
 - Installing the plugin makes `/skills-hub` available in a new chat.
 - `/skills-hub` bare command shows local help/status without fetching remote content.
 - `/skills-hub inventory`, `/skills-hub install <skill>`, and `/skills-hub update`
-  still verify signed Skills-hub artifacts and fail closed on verification errors.
+  use the public GitHub repo archive and do not require Firebase/static hosted
+  package artifacts.
 
-## Future Exact-Prompt Test
+## GitHub Package Test
 
-Use this only after Cowork supports installing the Git marketplace from the
-hosted root URL or resolving hosted marketplace relative sources.
+Use this after the plugin is installed.
 
 1. Start a new Claude Cowork chat.
 2. Send:
 
    ```text
-   Install https://mharbulous.github.io/skills-hub
+   /skills-hub install assemble-affidavit
    ```
 
-3. Cowork should present the `skills-hub` plugin card without using the
-   descriptor/base64 fallback.
-
-## Descriptor Fallback Test
-
-Use this only when testing the fallback path from `README.md` under
-`Setup > Claude Cowork > Descriptor Fallback`.
-
-- Cowork discovers `https://mharbulous.github.io/skills-hub/cowork/install.json` from the root URL.
-- Cowork verifies `cowork/install.json.sig` with `bootstrap/skills_hub_allowed_signers`.
-- Cowork fetches the descriptor's `artifact.b64_url` as exact text only if it
-  has a byte-preserving fetch-to-file path.
-- Cowork verifies `artifact.b64_size`, `artifact.b64_sha256`, and the decoded
-  `skills-hub.skill` size and SHA-256 before import.
-- A new Cowork chat can invoke `/skills-hub`.
+3. Cowork should download the public GitHub repo archive, build
+   `assemble-affidavit.skill` locally, and present one Save-skill card.
 
 ## Expected Failure Behavior
 
-On network, signature, freshness, hash, size, decode, import, or presentation
-failure, Cowork stops without trusting partial remote content and reports the
-exact failed check. If no byte-preserving fetch-to-file path exists during
-descriptor fallback, Cowork stops with
-`BLOCKED: no byte-preserving fetch-to-file path`.
+On network, zip decode, package build, import, or presentation failure, Cowork
+stops without presenting a partial package and reports the exact failed check.
 
 ## External Discovery Gate
 
-If Cowork cannot discover and install the marketplace from the bare root URL,
-exact-prompt acceptance is blocked until Cowork supports that flow or the
-marketplace is published through Cowork's external plugin registry.
+If Cowork cannot install the repository marketplace directly, acceptance is
+blocked until Cowork supports public Git repository marketplaces or the plugin
+is published through Cowork's external plugin registry.

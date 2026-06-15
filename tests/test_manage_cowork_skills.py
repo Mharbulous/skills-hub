@@ -7,6 +7,7 @@ import shutil
 import sys
 import subprocess
 import threading
+import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -151,6 +152,16 @@ def write_signed_packages_index(base_dir, key, names):
     return packages_path, base_dir / "packages.json.sig"
 
 
+def make_repo_skill(repo_root, name, body="Body\n"):
+    skill = repo_root / "public" / "skills" / name
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: Test {name}\n---\n\n{body}",
+        encoding="utf-8",
+    )
+    return skill
+
+
 def test_inventory_classifies_missing_stale_orphan_and_current(tmp_path):
     manager = load_manager()
     catalog = {
@@ -178,6 +189,69 @@ def test_inventory_classifies_missing_stale_orphan_and_current(tmp_path):
     assert rows["beta"].status == "current"
     assert rows["gamma"].status == "missing"
     assert rows["orphan"].status == "orphan"
+
+
+def test_inventory_defaults_to_github_repo_archive(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    repo = tmp_path / "repo"
+    install_root = tmp_path / "install"
+    make_repo_skill(repo, "alpha")
+    make_repo_skill(repo, "beta")
+    make_installed(install_root, "alpha", "Skills-hub Verified Resolver Stub\npython skills-hub-fetch.py cowork alpha\n")
+    monkeypatch.setattr(manager, "fetch_github_repo", lambda repo_name, ref, dest: repo)
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(install_root)],
+            index=None,
+            manifest=None,
+            signature=None,
+            packages=None,
+            packages_signature=None,
+            base_url=None,
+            repo="Mharbulous/skills-hub",
+            ref="main",
+            allowed_signers=None,
+            json=True,
+            names=None,
+        )
+    )
+
+    rows = {row["name"]: row for row in json.loads(capsys.readouterr().out)}
+    assert rows["alpha"]["status"] == "current"
+    assert rows["beta"]["status"] == "missing"
+
+
+def test_fetch_package_defaults_to_direct_github_skill_package(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    repo = tmp_path / "repo"
+    skill = make_repo_skill(repo, "alpha", body="Canonical alpha\n")
+    (skill / "scripts").mkdir()
+    (skill / "scripts" / "tool.py").write_text("print('ok')\n", encoding="utf-8")
+    monkeypatch.setattr(manager, "fetch_github_repo", lambda repo_name, ref, dest: repo)
+
+    manager.cmd_fetch_package(
+        SimpleNamespace(
+            skill="alpha",
+            base_url=None,
+            repo="Mharbulous/skills-hub",
+            ref="main",
+            output_dir=tmp_path / "out",
+            allowed_signers=None,
+            json=True,
+        )
+    )
+
+    result = json.loads(capsys.readouterr().out)
+    package = Path(result["package_path"])
+    assert package.is_file()
+    assert result["package_url"] == "https://github.com/Mharbulous/skills-hub/tree/main/public/skills/alpha"
+    with zipfile.ZipFile(package) as zf:
+        names = set(zf.namelist())
+        skill_md = zf.read("alpha/SKILL.md").decode("utf-8")
+    assert names == {"alpha/SKILL.md", "alpha/scripts/tool.py"}
+    assert "Canonical alpha" in skill_md
+    assert "Skills-hub Verified Resolver Stub" not in skill_md
 
 
 def test_inventory_autocorrects_skills_dir_root(tmp_path, capsys):
@@ -351,7 +425,7 @@ def test_inventory_uses_verified_remote_manifest_without_repo_root(tmp_path, mon
     assert rows[0]["status"] == "current"
 
 
-def test_inventory_degrades_when_remote_manifest_signature_fails(tmp_path, capsys):
+def test_inventory_degrades_when_remote_manifest_is_invalid(tmp_path, capsys):
     manager = load_manager()
     key, allowed = make_signing_material(tmp_path)
     base = tmp_path / "base"
@@ -375,7 +449,7 @@ def test_inventory_degrades_when_remote_manifest_signature_fails(tmp_path, capsy
 
     output = json.loads(capsys.readouterr().out)
     assert output["catalog"]["status"] == "blocked"
-    assert "manifest signature verification failed" in output["catalog"]["error"]
+    assert "invalid manifest generated_at timestamp" in output["catalog"]["error"]
     assert output["installed"] == [
         {
             "name": "alpha",
@@ -410,7 +484,7 @@ def test_inventory_degrades_when_remote_manifest_unreachable(tmp_path, monkeypat
 
     output = json.loads(capsys.readouterr().out)
     assert output["catalog"]["status"] == "blocked"
-    assert "could not download signed manifest" in output["catalog"]["error"]
+    assert "could not download public manifest" in output["catalog"]["error"]
     assert output["installed"][0]["local_status"] == "stale-wrapper-marker"
     assert {row.get("status") for row in output["installed"]} == {None}
 

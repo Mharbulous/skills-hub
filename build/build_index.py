@@ -114,15 +114,16 @@ BOOTSTRAP_FILES = ["decode-package.py", "skills-hub-from-text.md"]
 ROOT_INSTALL_PROMPT = f"Install {BASE_URL}"
 ROOT_INDEX = PUBLIC / "index.html"
 PLUGIN_VERSION = "0.1.0"
-PLUGIN_DESCRIPTION = "Install and manage verified Skills-hub resolver-wrapper skills in Claude Cowork."
+PLUGIN_DESCRIPTION = "Install and manage Skills-hub skills from the public GitHub repo in Claude Cowork."
 PLUGIN_KEYWORDS = [
     "skills-hub",
     "skills hub",
     "install skills hub",
     "cowork skills",
-    "verified skills",
-    "resolver wrapper",
+    "github skills",
+    "public skills repo",
 ]
+PLUGIN_HOMEPAGE = GITHUB_REPO_URL or BASE_URL
 
 
 def split_frontmatter(text):
@@ -265,7 +266,7 @@ def write_plugin_tree(plugin_dir, skill_dirs):
         "version": PLUGIN_VERSION,
         "description": PLUGIN_DESCRIPTION,
         "author": {"name": "Skills-hub"},
-        "homepage": BASE_URL,
+        "homepage": PLUGIN_HOMEPAGE,
         "keywords": PLUGIN_KEYWORDS,
         "skills": "./skills",
     }
@@ -292,8 +293,9 @@ def write_plugin_tree(plugin_dir, skill_dirs):
     (plugin_dir / "README.md").write_text(
         "# Skills-hub Cowork Plugin\n\n"
         "Installs the `/skills-hub` control panel in Claude Cowork. "
-        "The control panel verifies signed Skills-hub manifests before "
-        "inventory, install, or update operations.\n",
+        "The control panel builds Cowork packages from the public "
+        "Mharbulous/skills-hub GitHub repository for inventory, install, "
+        "and update operations.\n",
         encoding="utf-8",
     )
     return True
@@ -313,7 +315,7 @@ def write_marketplace(marketplace_path, name, description, source):
                 "description": PLUGIN_DESCRIPTION,
                 "source": source,
                 "category": "productivity",
-                "homepage": BASE_URL,
+                "homepage": PLUGIN_HOMEPAGE,
                 "keywords": PLUGIN_KEYWORDS,
             }
         ],

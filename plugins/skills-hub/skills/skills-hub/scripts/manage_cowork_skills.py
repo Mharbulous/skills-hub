@@ -17,13 +17,15 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 
-BASE_URL = "https://mharbulous.github.io/skills-hub"
 DEFAULT_GITHUB_REPO = "Mharbulous/skills-hub"
+DEFAULT_GITHUB_REF = "main"
+BASE_URL = f"https://raw.githubusercontent.com/{DEFAULT_GITHUB_REPO}/{DEFAULT_GITHUB_REF}"
 CONTEXT_FILE = ".skills-hub-context.json"
 PACKAGES_SCHEMA_VERSION = 1
 SIGNING_IDENTITY = "skills-hub-manifest"
@@ -161,6 +163,96 @@ def fetch_bytes(url: str) -> bytes:
         return resp.read()
 
 
+def fetch_github_repo(repo: str, ref: str, dest: Path) -> Path:
+    owner, name = validate_repo(repo)
+    archive_url = f"https://codeload.github.com/{owner}/{name}/zip/{urllib.parse.quote(ref, safe='')}"
+    archive = dest / "repo.zip"
+    archive.write_bytes(fetch_bytes(archive_url))
+    extract_dir = dest / "repo"
+    extract_dir.mkdir()
+    with zipfile.ZipFile(archive) as zf:
+        for member in zf.infolist():
+            parts = Path(member.filename).parts
+            if not parts or any(part == ".." for part in parts):
+                fail(f"unsafe path in GitHub archive: {member.filename}")
+        zf.extractall(extract_dir)
+    roots = [path for path in extract_dir.iterdir() if path.is_dir()]
+    if len(roots) != 1:
+        fail(f"could not locate repository root in GitHub archive for {repo}@{ref}")
+    return roots[0]
+
+
+def github_skill_dirs(repo_root: Path) -> list[Path]:
+    skills = repo_root / "public" / "skills"
+    if not skills.is_dir():
+        fail(f"GitHub repo archive has no public/skills directory: {repo_root}")
+    return sorted(path for path in skills.iterdir() if (path / "SKILL.md").is_file())
+
+
+def github_catalog(repo_root: Path) -> dict:
+    return {"skills": [{"name": path.name} for path in github_skill_dirs(repo_root)]}
+
+
+def strip_frontmatter(text: str) -> str:
+    if text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end != -1:
+            return text[end + 4 :].lstrip("\n")
+    return text
+
+
+def direct_package_files(skill_source: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in sorted(skill_source.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(skill_source)
+        if any(part in EXCLUDED_DIRS or part == "overrides" or part.startswith(".") for part in rel.parts):
+            continue
+        if path.name in EXCLUDED_NAMES or path.suffix in EXCLUDED_SUFFIXES:
+            continue
+        files.append(rel)
+    return files
+
+
+def merged_cowork_skill_text(skill_source: Path) -> str:
+    text = (skill_source / "SKILL.md").read_text(encoding="utf-8")
+    override = skill_source / "overrides" / "cowork.md"
+    if override.is_file():
+        body = strip_frontmatter(override.read_text(encoding="utf-8")).strip()
+        if body:
+            text = text.rstrip() + "\n\n" + body + "\n"
+    return text
+
+
+def write_direct_skill_package(repo_root: Path, skill: str, output_dir: Path, repo: str, ref: str, as_json: bool) -> FetchResult:
+    skill_source = repo_root / "public" / "skills" / skill
+    if not (skill_source / "SKILL.md").is_file():
+        emit_structured_error(skill, "skill not found in GitHub repo", as_json)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        emit_structured_error(skill, f"output directory not writable: {output_dir}; pass --output-dir <writable dir> ({exc})", as_json)
+    package = output_dir / f"{skill}.skill"
+    try:
+        with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for rel in direct_package_files(skill_source):
+                archive_name = f"{skill}/{rel.as_posix()}"
+                if rel.as_posix() == "SKILL.md":
+                    zf.writestr(archive_name, merged_cowork_skill_text(skill_source))
+                else:
+                    zf.write(skill_source / rel, archive_name)
+    except OSError as exc:
+        emit_structured_error(skill, f"output directory not writable: {output_dir}; pass --output-dir <writable dir> ({exc})", as_json)
+    return FetchResult(
+        skill=skill,
+        package_path=str(package),
+        package_url=f"https://github.com/{repo}/tree/{urllib.parse.quote(ref, safe='')}/public/skills/{urllib.parse.quote(skill)}",
+        sha256=sha256_file(package),
+        size=package.stat().st_size,
+    )
+
+
 def catalog_unavailable(message: str) -> None:
     raise CatalogUnavailable(message)
 
@@ -173,23 +265,16 @@ def is_freshness_verification_error(message: str) -> bool:
     )
 
 
-def verified_remote_manifest(base_url: str, allowed_signers: Path, verifier) -> dict:
+def public_remote_manifest(base_url: str, verifier) -> dict:
     base_url = base_url.rstrip("/")
     try:
         manifest_data = fetch_bytes(f"{base_url}/manifest.json")
-        signature_data = fetch_bytes(f"{base_url}/manifest.json.sig")
     except (OSError, RuntimeError, urllib.error.URLError) as exc:
-        catalog_unavailable(f"could not download signed manifest from {base_url}: {exc}")
+        catalog_unavailable(f"could not download public manifest from {base_url}: {exc}")
     with tempfile.TemporaryDirectory(prefix="skills-hub-manifest-") as tmp:
         tmp_path = Path(tmp)
         manifest_path = tmp_path / "manifest.json"
-        signature_path = tmp_path / "manifest.json.sig"
         manifest_path.write_bytes(manifest_data)
-        signature_path.write_bytes(signature_data)
-        try:
-            verifier.verify_signature(manifest_path, signature_path, allowed_signers)
-        except verifier.VerificationError as exc:
-            catalog_unavailable(str(exc))
         try:
             return verifier.load_manifest(manifest_path)
         except verifier.VerificationError as exc:
@@ -224,9 +309,9 @@ def load_catalog(
         return json.loads(manifest_path.read_text(encoding="utf-8"))
     if index_path:
         return json.loads(index_path.read_text(encoding="utf-8"))
-    if not base_url or not allowed_signers or verifier is None:
-        fail("no catalog source; pass --manifest, --index, or run from a verified Skills-hub cache")
-    return verified_remote_manifest(base_url, allowed_signers, verifier)
+    if not base_url or verifier is None:
+        fail("no catalog source; pass --manifest, --index, or run from a Skills-hub cache")
+    return public_remote_manifest(base_url, verifier)
 
 
 def catalog_names(catalog: dict) -> set[str]:
@@ -436,25 +521,34 @@ def parse_names_filter(args) -> set[str] | None:
 
 def cmd_inventory(args) -> None:
     context = read_context()
-    base_url = args.base_url or context.get("base_url") or BASE_URL
+    base_url = getattr(args, "base_url", None)
+    repo = getattr(args, "repo", DEFAULT_GITHUB_REPO)
+    ref = getattr(args, "ref", DEFAULT_GITHUB_REF)
     names_filter = parse_names_filter(args)
     packages_path = getattr(args, "packages", None)
     packages_signature = getattr(args, "packages_signature", None)
-    if packages_path and not packages_signature:
-        fail("--packages requires --packages-signature")
     if packages_signature and not packages_path:
         fail("--packages-signature requires --packages")
     verifier = None
     allowed_signers = None
-    if args.signature or packages_path or (not args.index and not args.manifest):
+    if args.signature or packages_signature:
         allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
-    if args.signature or (not args.index and not args.manifest and not packages_path):
+    use_github_catalog = not args.index and not args.manifest and not packages_path and not base_url
+    if args.signature or (base_url and not args.index and not args.manifest and not packages_path):
         verifier = load_verifier()
     try:
         if packages_path:
             packages = load_packages_index(packages_path)
-            verify_packages_signature(packages, packages_signature, allowed_signers)
+            if packages_signature:
+                verify_packages_signature(packages, packages_signature, allowed_signers)
             catalog = catalog_from_packages(packages)
+        elif use_github_catalog:
+            try:
+                with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
+                    repo_root = fetch_github_repo(repo, ref, Path(tmp))
+                    catalog = github_catalog(repo_root)
+            except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
+                catalog_unavailable(f"could not download GitHub repo {repo}@{ref}: {exc}")
         else:
             catalog = load_catalog(
                 index_path=args.index,
@@ -490,24 +584,35 @@ def write_remote_file(base_url: str, relpath: str, dest: Path) -> None:
 
 
 def cmd_fetch_package(args) -> None:
-    context = read_context()
-    verifier = load_verifier()
-    base_url = (args.base_url or context.get("base_url") or BASE_URL).rstrip("/")
+    base_url = getattr(args, "base_url", None)
+    repo = getattr(args, "repo", DEFAULT_GITHUB_REPO)
+    ref = getattr(args, "ref", DEFAULT_GITHUB_REF)
     output_dir = args.output_dir
-    allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
+    if not base_url:
+        try:
+            with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
+                repo_root = fetch_github_repo(repo, ref, Path(tmp))
+                result = write_direct_skill_package(repo_root, args.skill, output_dir, repo, ref, args.json)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
+            emit_structured_error(args.skill, f"could not download GitHub repo {repo}@{ref}: {exc}", args.json)
+        if args.json:
+            print(json.dumps(asdict(result), indent=2))
+        else:
+            print(result.package_path)
+        return
+
+    verifier = load_verifier()
+    base_url = base_url.rstrip("/")
     relpath = f"cowork/skill-packages/{args.skill}.skill"
 
     with tempfile.TemporaryDirectory(prefix="skills-hub-fetch-package-") as tmp:
         tmp_path = Path(tmp)
         manifest = tmp_path / "manifest.json"
-        signature = tmp_path / "manifest.json.sig"
         try:
             write_remote_file(base_url, "manifest.json", manifest)
-            write_remote_file(base_url, "manifest.json.sig", signature)
         except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError) as exc:
-            emit_structured_error(args.skill, f"could not download signed manifest from {base_url}: {exc}", args.json)
+            emit_structured_error(args.skill, f"could not download public manifest from {base_url}: {exc}", args.json)
         try:
-            verifier.verify_signature(manifest, signature, allowed_signers)
             manifest_doc = verifier.load_manifest(manifest)
         except verifier.VerificationError as exc:
             fail(str(exc))
@@ -630,6 +735,14 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file_obj:
+        for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def decode_base64_file(path: Path) -> bytes:
     try:
         return base64.b64decode(path.read_text(encoding="ascii").encode("ascii"), validate=False)
@@ -641,13 +754,14 @@ def decode_package_from_text(
     *,
     skill: str,
     packages_path: Path,
-    signature_path: Path,
-    allowed_signers: Path,
+    signature_path: Path | None,
+    allowed_signers: Path | None,
     b64_path: Path,
     output_dir: Path,
 ) -> DecodeResult:
     packages = load_packages_index(packages_path)
-    verify_packages_signature(packages, signature_path, allowed_signers)
+    if signature_path:
+        verify_packages_signature(packages, signature_path, allowed_signers)
     entry = package_index_entry(packages, skill)
     output_dir.mkdir(parents=True, exist_ok=True)
     package = output_dir / f"{skill}.skill"
@@ -680,7 +794,7 @@ def decode_package_from_text(
 
 def cmd_decode_package(args) -> None:
     context = read_context()
-    allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
+    allowed_signers = resolve_allowed_signers(args.allowed_signers, context) if args.signature else None
     result = decode_package_from_text(
         skill=args.skill,
         packages_path=args.packages,
@@ -870,6 +984,8 @@ def main() -> None:
     inventory.add_argument("--packages", type=Path)
     inventory.add_argument("--packages-signature", type=Path)
     inventory.add_argument("--base-url")
+    inventory.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
+    inventory.add_argument("--ref", default=DEFAULT_GITHUB_REF)
     inventory.add_argument("--allowed-signers", type=Path)
     inventory.add_argument("--json", action="store_true")
     inventory.set_defaults(func=cmd_inventory)
@@ -877,6 +993,8 @@ def main() -> None:
     fetch_package = sub.add_parser("fetch-package")
     fetch_package.add_argument("skill")
     fetch_package.add_argument("--base-url")
+    fetch_package.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
+    fetch_package.add_argument("--ref", default=DEFAULT_GITHUB_REF)
     fetch_package.add_argument("--output-dir", type=Path, default=Path("outputs") / "skills-hub-packages")
     fetch_package.add_argument("--allowed-signers", type=Path)
     fetch_package.add_argument("--json", action="store_true")
@@ -885,7 +1003,7 @@ def main() -> None:
     decode_package = sub.add_parser("decode-package")
     decode_package.add_argument("skill")
     decode_package.add_argument("--packages", type=Path, required=True)
-    decode_package.add_argument("--signature", type=Path, required=True)
+    decode_package.add_argument("--signature", type=Path)
     decode_package.add_argument("--allowed-signers", type=Path)
     decode_package.add_argument("--b64", type=Path, required=True)
     decode_package.add_argument("--output-dir", type=Path, default=Path("outputs") / "skills-hub-packages")

@@ -1,3 +1,3 @@
 # Skills-hub Cowork Plugin
 
-Installs the `/skills-hub` control panel in Claude Cowork. The control panel verifies signed Skills-hub manifests before inventory, install, or update operations.
+Installs the `/skills-hub` control panel in Claude Cowork. The control panel builds Cowork packages from the public Mharbulous/skills-hub GitHub repository for inventory, install, and update operations.

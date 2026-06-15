@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decode and verify a text-safe Skills-hub Cowork package."""
+"""Decode a text-safe Skills-hub Cowork package."""
 
 from __future__ import annotations
 
@@ -126,9 +126,19 @@ def decode_base64(path: Path) -> bytes:
         fail(f"could not decode base64 package text: {exc}")
 
 
-def decode_package(skill: str, packages_path: Path, signature_path: Path, allowed_signers: Path, b64_path: Path, output_dir: Path) -> DecodeResult:
+def decode_package(
+    skill: str,
+    packages_path: Path,
+    signature_path: Path | None,
+    allowed_signers: Path | None,
+    b64_path: Path,
+    output_dir: Path,
+) -> DecodeResult:
     packages = load_packages(packages_path)
-    verify_signature(packages, signature_path, allowed_signers)
+    if signature_path:
+        if allowed_signers is None:
+            fail("--allowed-signers is required with --signature")
+        verify_signature(packages, signature_path, allowed_signers)
     entry = package_entry(packages, skill)
     output_dir.mkdir(parents=True, exist_ok=True)
     package_path = output_dir / f"{skill}.skill"
@@ -155,8 +165,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skill", required=True)
     parser.add_argument("--packages", type=Path, required=True)
-    parser.add_argument("--signature", type=Path, required=True)
-    parser.add_argument("--allowed-signers", type=Path, required=True)
+    parser.add_argument("--signature", type=Path)
+    parser.add_argument("--allowed-signers", type=Path)
     parser.add_argument("--b64", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--json", action="store_true")

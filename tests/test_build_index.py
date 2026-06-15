@@ -386,15 +386,13 @@ def test_build_copies_cowork_bootstrap_files(tmp_public):
 def test_text_bootstrap_doc_references_required_artifacts():
     text = (ROOT / "public" / "bootstrap" / "skills-hub-from-text.md").read_text(encoding="utf-8")
 
-    assert "trust-on-first-use" in text
-    assert "https://mharbulous.github.io/skills-hub/bootstrap/skills_hub_allowed_signers" in text
     assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/packages.json" in text
-    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/packages.json.sig" in text
     assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/<skill>.skill.b64.txt" in text
-    assert "python scripts/manage_cowork_skills.py inventory --packages packages.json --packages-signature packages.json.sig" in text
+    assert "python scripts/manage_cowork_skills.py inventory --packages packages.json --json" in text
     assert "python scripts/manage_cowork_skills.py decode-package <skill>" in text
     assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/skills-hub.skill.b64.txt" in text
     assert "do not fetch or run remote Python scripts" in text
+    assert "packages.json.sig" not in text
 
 
 def test_cowork_package_contains_stub_and_fetcher(tmp_public):
@@ -465,19 +463,17 @@ def test_skill_editing_docs_do_not_use_coclerk_distribution_paths():
         assert needle not in text
 
 
-def test_manual_cowork_acceptance_matches_descriptor_install_contract():
+def test_manual_cowork_acceptance_matches_github_package_contract():
     text = (ROOT / "tests" / "manual_cowork_install_acceptance.md").read_text(encoding="utf-8")
 
     assert "Current Supported Test" in text
     assert "https://github.com/Mharbulous/skills-hub.git" in text
-    assert "Future Exact-Prompt Test" in text
+    assert "GitHub Package Test" in text
     assert "plugin card" in text
-    assert "Descriptor Fallback Test" in text
-    assert "artifact.b64_url" in text
-    assert "artifact.b64_size" in text
-    assert "artifact.b64_sha256" in text
+    assert "/skills-hub install assemble-affidavit" in text
+    assert "public GitHub repo archive" in text
+    assert "assemble-affidavit.skill" in text
     assert "External Discovery Gate" in text
-    assert "BLOCKED: no byte-preserving fetch-to-file path" in text
 
 
 def test_signed_build_writes_packages_signature(tmp_path, monkeypatch):
