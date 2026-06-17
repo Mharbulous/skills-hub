@@ -5,13 +5,10 @@ from __future__ import annotations
 
 import argparse
 import base64
-import binascii
 import hashlib
-import importlib.util
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -25,22 +22,8 @@ from pathlib import Path
 
 DEFAULT_GITHUB_REPO = "Mharbulous/skills-hub"
 DEFAULT_GITHUB_REF = "main"
-BASE_URL = f"https://raw.githubusercontent.com/{DEFAULT_GITHUB_REPO}/{DEFAULT_GITHUB_REF}"
 CONTEXT_FILE = ".skills-hub-context.json"
-PACKAGES_SCHEMA_VERSION = 1
-SIGNING_IDENTITY = "skills-hub-manifest"
-SIGNING_NAMESPACE = "skills-hub-manifest"
-STALE_MARKERS = [
-    "Myskillium Verified Resolver Stub",
-    "myskillium-fetch.py",
-    "myskillium",
-    "skills/assemble-affidavit.tar.gz",
-    "manifest schema v2",
-]
-CURRENT_MARKERS = [
-    "Skills-hub Verified Resolver Stub",
-    "skills-hub-fetch.py",
-]
+LOCKFILE_NAME = "skills-hub-lock.json"
 EXCLUDED_DIRS = {".git", ".hg", ".svn", "__pycache__", ".pytest_cache", ".mypy_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".skill"}
 EXCLUDED_NAMES = {"manifest.json", "manifest.json.sig"}
@@ -81,16 +64,8 @@ class FetchResult:
     package_url: str
     sha256: str
     size: int
-
-
-@dataclass
-class DecodeResult:
-    skill: str
-    package_path: str
-    package_url: str
-    b64_url: str
-    sha256: str
-    size: int
+    content_hash: str
+    source_ref: str
 
 
 def fail(message: str) -> None:
@@ -120,7 +95,7 @@ def read_context() -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        fail(f"invalid resolver context at {path}: {exc}")
+        fail(f"invalid context file at {path}: {exc}")
 
 
 def find_repo_root(start: Path | None = None) -> Path:
@@ -131,27 +106,11 @@ def find_repo_root(start: Path | None = None) -> Path:
     fail("could not find skills-hub repo root")
 
 
-def load_verifier():
-    verifier = script_dir() / "skills_hub_verify.py"
-    if not verifier.is_file():
-        fail(f"missing verifier: {verifier}")
-    spec = importlib.util.spec_from_file_location("skills_hub_verify", verifier)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def resolve_allowed_signers(override: Path | None = None, context: dict | None = None) -> Path:
-    if override:
-        return override
-    context = context or read_context()
-    context_path = context.get("allowed_signers_path")
-    if context_path:
-        return Path(context_path)
-    local = skill_dir() / "skills_hub_allowed_signers"
-    if local.is_file():
-        return local
-    fail("could not locate skills_hub_allowed_signers; pass --allowed-signers <path>")
+def validate_repo(value: str) -> tuple[str, str]:
+    parts = value.split("/")
+    if len(parts) != 2 or not all(parts):
+        fail("--repo must be in owner/name format")
+    return parts[0], parts[1]
 
 
 def fetch_bytes(url: str) -> bytes:
@@ -189,10 +148,6 @@ def github_skill_dirs(repo_root: Path) -> list[Path]:
     return sorted(path for path in skills.iterdir() if (path / "SKILL.md").is_file())
 
 
-def github_catalog(repo_root: Path) -> dict:
-    return {"skills": [{"name": path.name} for path in github_skill_dirs(repo_root)]}
-
-
 def strip_frontmatter(text: str) -> str:
     if text.startswith("---\n"):
         end = text.find("\n---", 4)
@@ -225,6 +180,104 @@ def merged_cowork_skill_text(skill_source: Path) -> str:
     return text
 
 
+def content_hash(skill_dir_path: Path) -> str:
+    """Hash all publishable files in a skill directory for freshness comparison."""
+    digest = hashlib.sha256()
+    for rel in direct_package_files(skill_dir_path):
+        digest.update(rel.as_posix().encode("utf-8"))
+        if rel.as_posix() == "SKILL.md":
+            digest.update(merged_cowork_skill_text(skill_dir_path).encode("utf-8"))
+        else:
+            digest.update((skill_dir_path / rel).read_bytes())
+    return digest.hexdigest()
+
+
+def github_catalog(repo_root: Path) -> dict:
+    return {
+        "skills": [
+            {"name": path.name, "content_hash": content_hash(path)}
+            for path in github_skill_dirs(repo_root)
+        ]
+    }
+
+
+def read_lockfile(install_root: Path) -> dict:
+    path = install_root / LOCKFILE_NAME
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("skills", {}) if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_lockfile(install_root: Path, lock: dict) -> None:
+    path = install_root / LOCKFILE_NAME
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.write_text(
+            json.dumps({"schema_version": 1, "skills": lock}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def record_install(install_root: Path, skill_name: str, content_hash_value: str, source_ref: str) -> None:
+    lock = read_lockfile(install_root)
+    lock[skill_name] = {
+        "content_hash": content_hash_value,
+        "installed_at": datetime.now(timezone.utc).isoformat(),
+        "source_ref": source_ref,
+    }
+    write_lockfile(install_root, lock)
+
+
+def merge_lockfiles(install_roots: list[Path]) -> dict:
+    merged: dict[str, dict] = {}
+    for root in install_roots:
+        for name, entry in read_lockfile(root).items():
+            existing = merged.get(name)
+            if existing is None or entry.get("installed_at", "") > existing.get("installed_at", ""):
+                merged[name] = entry
+    return merged
+
+
+CATALOG_CACHE_NAME = "skills-hub-catalog-cache.json"
+
+
+def cache_catalog(install_root: Path, catalog: dict) -> None:
+    path = install_root / CATALOG_CACHE_NAME
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.write_text(
+            json.dumps({"cached_at": datetime.now(timezone.utc).isoformat(), "catalog": catalog}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def read_cached_catalog(install_roots: list[Path]) -> tuple[dict, str] | None:
+    best: tuple[dict, str] | None = None
+    for root in install_roots:
+        path = root / CATALOG_CACHE_NAME
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            cached_at = data.get("cached_at", "")
+            catalog = data.get("catalog")
+            if isinstance(catalog, dict) and (best is None or cached_at > best[1]):
+                best = (catalog, cached_at)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return best
+
+
 def write_direct_skill_package(repo_root: Path, skill: str, output_dir: Path, repo: str, ref: str, as_json: bool) -> FetchResult:
     skill_source = repo_root / "public" / "skills" / skill
     if not (skill_source / "SKILL.md").is_file():
@@ -250,6 +303,8 @@ def write_direct_skill_package(repo_root: Path, skill: str, output_dir: Path, re
         package_url=f"https://github.com/{repo}/tree/{urllib.parse.quote(ref, safe='')}/public/skills/{urllib.parse.quote(skill)}",
         sha256=sha256_file(package),
         size=package.stat().st_size,
+        content_hash=content_hash(skill_source),
+        source_ref=f"{repo}@{ref}",
     )
 
 
@@ -257,75 +312,38 @@ def catalog_unavailable(message: str) -> None:
     raise CatalogUnavailable(message)
 
 
-def is_freshness_verification_error(message: str) -> bool:
-    return (
-        message == "manifest is expired"
-        or message == "manifest max_age_seconds must be positive"
-        or message.startswith("invalid manifest generated_at timestamp:")
-    )
-
-
-def public_remote_manifest(base_url: str, verifier) -> dict:
-    base_url = base_url.rstrip("/")
-    try:
-        manifest_data = fetch_bytes(f"{base_url}/manifest.json")
-    except (OSError, RuntimeError, urllib.error.URLError) as exc:
-        catalog_unavailable(f"could not download public manifest from {base_url}: {exc}")
-    with tempfile.TemporaryDirectory(prefix="skills-hub-manifest-") as tmp:
-        tmp_path = Path(tmp)
-        manifest_path = tmp_path / "manifest.json"
-        manifest_path.write_bytes(manifest_data)
-        try:
-            return verifier.load_manifest(manifest_path)
-        except verifier.VerificationError as exc:
-            if is_freshness_verification_error(str(exc)):
-                catalog_unavailable(str(exc))
-            fail(str(exc))
-
-
 def load_catalog(
     *,
     index_path: Path | None = None,
     manifest_path: Path | None = None,
-    signature_path: Path | None = None,
-    base_url: str | None = None,
-    allowed_signers: Path | None = None,
-    verifier=None,
 ) -> dict:
     if manifest_path:
-        if signature_path:
-            if verifier is None or allowed_signers is None:
-                fail("--signature requires manifest verifier and allowed signers")
-            try:
-                verifier.verify_signature(manifest_path, signature_path, allowed_signers)
-            except verifier.VerificationError as exc:
-                catalog_unavailable(str(exc))
-            try:
-                return verifier.load_manifest(manifest_path)
-            except verifier.VerificationError as exc:
-                if is_freshness_verification_error(str(exc)):
-                    catalog_unavailable(str(exc))
-                fail(str(exc))
         return json.loads(manifest_path.read_text(encoding="utf-8"))
     if index_path:
         return json.loads(index_path.read_text(encoding="utf-8"))
-    if not base_url or verifier is None:
-        fail("no catalog source; pass --manifest, --index, or run from a Skills-hub cache")
-    return public_remote_manifest(base_url, verifier)
+    fail("no catalog source; pass --manifest or --index")
 
 
 def catalog_names(catalog: dict) -> set[str]:
     return {entry["name"] for entry in catalog.get("skills", [])}
 
 
-def catalog_from_packages(packages: dict) -> dict:
-    return {"skills": [{"name": entry["name"]} for entry in packages.get("packages", []) if entry.get("name")]}
+def catalog_hashes(catalog: dict) -> dict[str, str]:
+    return {
+        entry["name"]: entry["content_hash"]
+        for entry in catalog.get("skills", [])
+        if "content_hash" in entry
+    }
 
 
 def skill_dir_install_root() -> list[Path]:
     parent = skill_dir().parent
     if parent.name == "skills" and parent.parent.exists():
-        return [parent.parent]
+        plugin_level = parent.parent
+        for ancestor in plugin_level.parents:
+            if ancestor.name == "skills-plugin":
+                return [ancestor]
+        return [plugin_level]
     return []
 
 
@@ -382,7 +400,12 @@ def discover_installed(install_roots: list[Path]) -> dict[str, list[InstalledSki
     return installed
 
 
-def classify_installed(name: str, installed: list[InstalledSkill]) -> InventoryRow:
+def classify_installed(
+    name: str,
+    installed: list[InstalledSkill],
+    catalog_hash: str | None = None,
+    lock_hash: str | None = None,
+) -> InventoryRow:
     if len(installed) > 1:
         return InventoryRow(
             name=name,
@@ -391,23 +414,43 @@ def classify_installed(name: str, installed: list[InstalledSkill]) -> InventoryR
             path=installed[0].skill_md,
         )
     item = installed[0]
-    text = Path(item.skill_md).read_text(encoding="utf-8", errors="replace")
-    lowered = text.lower()
-    if any(marker.lower() in lowered for marker in STALE_MARKERS):
-        return InventoryRow(name=name, status="stale-wrapper", evidence="matched stale wrapper marker", path=item.skill_md)
-    if all(marker.lower() in lowered for marker in CURRENT_MARKERS) and f"cowork {name}".lower() in lowered:
-        return InventoryRow(name=name, status="current", evidence="current Skills-hub resolver wrapper", path=item.skill_md)
-    return InventoryRow(name=name, status="conflict", evidence="installed skill is not a recognized Skills-hub wrapper", path=item.skill_md)
+    try:
+        installed_hash = content_hash(Path(item.root))
+    except OSError:
+        return InventoryRow(
+            name=name,
+            status="stale",
+            evidence="could not read installed skill files for comparison",
+            path=item.skill_md,
+        )
+    if catalog_hash and installed_hash == catalog_hash:
+        return InventoryRow(name=name, status="current", evidence="content matches GitHub source", path=item.skill_md)
+    if lock_hash:
+        user_modified = installed_hash != lock_hash
+        hub_updated = catalog_hash is not None and catalog_hash != lock_hash
+        if user_modified and hub_updated:
+            return InventoryRow(name=name, status="diverged", evidence="local edits and hub updates — review locally or force-update", path=item.skill_md)
+        if user_modified:
+            return InventoryRow(name=name, status="modified", evidence="locally edited; hub content unchanged", path=item.skill_md)
+        if hub_updated:
+            return InventoryRow(name=name, status="stale", evidence="hub updated; safe to update", path=item.skill_md)
+        return InventoryRow(name=name, status="current", evidence="unchanged since install", path=item.skill_md)
+    if catalog_hash:
+        return InventoryRow(name=name, status="stale", evidence="content differs from GitHub source; no install record", path=item.skill_md)
+    return InventoryRow(name=name, status="stale", evidence="could not compare", path=item.skill_md)
 
 
-def build_inventory(catalog: dict, installed: dict[str, list[InstalledSkill]]) -> list[InventoryRow]:
+def build_inventory(catalog: dict, installed: dict[str, list[InstalledSkill]], install_roots: list[Path] | None = None) -> list[InventoryRow]:
     names = catalog_names(catalog)
+    hashes = catalog_hashes(catalog)
+    lock = merge_lockfiles(install_roots) if install_roots else {}
     rows: list[InventoryRow] = []
     for name in sorted(names):
         if name not in installed:
             rows.append(InventoryRow(name=name, status="missing", evidence="present in Skills-hub catalog but not installed"))
         else:
-            rows.append(classify_installed(name, installed[name]))
+            lock_hash = lock.get(name, {}).get("content_hash")
+            rows.append(classify_installed(name, installed[name], hashes.get(name), lock_hash))
     for name in sorted(set(installed) - names):
         newest = installed[name][0]
         rows.append(InventoryRow(name=name, status="orphan", evidence="installed in Cowork but absent from Skills-hub catalog", path=newest.skill_md))
@@ -465,28 +508,11 @@ def classify_local_installed(name: str, installed: list[InstalledSkill]) -> Loca
             evidence=f"multiple installed copies found ({len(installed)}); newest listed",
             path=installed[0].skill_md,
         )
-    item = installed[0]
-    text = Path(item.skill_md).read_text(encoding="utf-8", errors="replace")
-    lowered = text.lower()
-    if all(marker.lower() in lowered for marker in CURRENT_MARKERS):
-        return LocalInventoryRow(
-            name=name,
-            local_status="skills-hub-wrapper",
-            evidence="local Skills-hub resolver wrapper markers found",
-            path=item.skill_md,
-        )
-    if any(marker.lower() in lowered for marker in STALE_MARKERS):
-        return LocalInventoryRow(
-            name=name,
-            local_status="stale-wrapper-marker",
-            evidence="matched stale wrapper marker",
-            path=item.skill_md,
-        )
     return LocalInventoryRow(
         name=name,
-        local_status="unrecognized",
-        evidence="installed skill is not a recognized Skills-hub wrapper",
-        path=item.skill_md,
+        local_status="installed",
+        evidence="installed locally; freshness cannot be verified without catalog",
+        path=installed[0].skill_md,
     )
 
 
@@ -521,28 +547,12 @@ def parse_names_filter(args) -> set[str] | None:
 
 def cmd_inventory(args) -> None:
     context = read_context()
-    base_url = getattr(args, "base_url", None)
     repo = getattr(args, "repo", DEFAULT_GITHUB_REPO)
     ref = getattr(args, "ref", DEFAULT_GITHUB_REF)
     names_filter = parse_names_filter(args)
-    packages_path = getattr(args, "packages", None)
-    packages_signature = getattr(args, "packages_signature", None)
-    if packages_signature and not packages_path:
-        fail("--packages-signature requires --packages")
-    verifier = None
-    allowed_signers = None
-    if args.signature or packages_signature:
-        allowed_signers = resolve_allowed_signers(args.allowed_signers, context)
-    use_github_catalog = not args.index and not args.manifest and not packages_path and not base_url
-    if args.signature or (base_url and not args.index and not args.manifest and not packages_path):
-        verifier = load_verifier()
+    use_github_catalog = not args.index and not args.manifest
     try:
-        if packages_path:
-            packages = load_packages_index(packages_path)
-            if packages_signature:
-                verify_packages_signature(packages, packages_signature, allowed_signers)
-            catalog = catalog_from_packages(packages)
-        elif use_github_catalog:
+        if use_github_catalog:
             try:
                 with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
                     repo_root = fetch_github_repo(repo, ref, Path(tmp))
@@ -553,13 +563,21 @@ def cmd_inventory(args) -> None:
             catalog = load_catalog(
                 index_path=args.index,
                 manifest_path=args.manifest,
-                signature_path=args.signature,
-                base_url=base_url,
-                allowed_signers=allowed_signers,
-                verifier=verifier,
             )
     except CatalogUnavailable as exc:
         roots = inventory_roots(args, context)
+        if roots:
+            cached = read_cached_catalog(roots)
+            if cached:
+                catalog, cached_at = cached
+                installed = discover_installed(roots)
+                rows = build_inventory(catalog, installed, roots)
+                for row in rows:
+                    row.evidence += f" (offline — using cached catalog from {cached_at})"
+                if names_filter:
+                    rows = [r for r in rows if r.name in names_filter]
+                print_inventory(rows, args.json)
+                return
         installed = discover_installed(roots) if roots else {}
         local_rows = build_local_inventory(installed)
         if names_filter:
@@ -572,167 +590,28 @@ def cmd_inventory(args) -> None:
     installed = discover_installed(roots)
     if not installed:
         warn_empty_install_roots(roots)
-    rows = build_inventory(catalog, installed)
+    if use_github_catalog:
+        cache_catalog(roots[0], catalog)
+    rows = build_inventory(catalog, installed, roots)
     if names_filter:
         rows = [r for r in rows if r.name in names_filter]
     print_inventory(rows, args.json)
 
 
-def write_remote_file(base_url: str, relpath: str, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(fetch_bytes(f"{base_url.rstrip('/')}/{relpath}"))
-
-
 def cmd_fetch_package(args) -> None:
-    base_url = getattr(args, "base_url", None)
     repo = getattr(args, "repo", DEFAULT_GITHUB_REPO)
     ref = getattr(args, "ref", DEFAULT_GITHUB_REF)
     output_dir = args.output_dir
-    if not base_url:
-        try:
-            with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
-                repo_root = fetch_github_repo(repo, ref, Path(tmp))
-                result = write_direct_skill_package(repo_root, args.skill, output_dir, repo, ref, args.json)
-        except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
-            emit_structured_error(args.skill, f"could not download GitHub repo {repo}@{ref}: {exc}", args.json)
-        if args.json:
-            print(json.dumps(asdict(result), indent=2))
-        else:
-            print(result.package_path)
-        return
-
-    verifier = load_verifier()
-    base_url = base_url.rstrip("/")
-    relpath = f"cowork/skill-packages/{args.skill}.skill"
-
-    with tempfile.TemporaryDirectory(prefix="skills-hub-fetch-package-") as tmp:
-        tmp_path = Path(tmp)
-        manifest = tmp_path / "manifest.json"
-        try:
-            write_remote_file(base_url, "manifest.json", manifest)
-        except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError) as exc:
-            emit_structured_error(args.skill, f"could not download public manifest from {base_url}: {exc}", args.json)
-        try:
-            manifest_doc = verifier.load_manifest(manifest)
-        except verifier.VerificationError as exc:
-            fail(str(exc))
-        if relpath not in manifest_doc.get("files", {}):
-            emit_structured_error(args.skill, "skill not found in catalog", args.json)
-        try:
-            output_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            emit_structured_error(args.skill, f"output directory not writable: {output_dir}; pass --output-dir <writable dir> ({exc})", args.json)
-        package = output_dir / f"{args.skill}.skill"
-        try:
-            write_remote_file(base_url, relpath, package)
-        except (urllib.error.HTTPError, urllib.error.URLError, RuntimeError) as exc:
-            emit_structured_error(args.skill, f"could not download package {relpath}: {exc}", args.json)
-        except OSError as exc:
-            emit_structured_error(args.skill, f"output directory not writable: {output_dir}; pass --output-dir <writable dir> ({exc})", args.json)
-        try:
-            verifier.verify_artifact(manifest_doc, relpath, package)
-        except verifier.VerificationError as exc:
-            try:
-                package.unlink()
-            except OSError:
-                pass
-            fail(str(exc))
-    entry = manifest_doc["files"][relpath]
-    result = FetchResult(
-        skill=args.skill,
-        package_path=str(package),
-        package_url=f"{base_url}/{relpath}",
-        sha256=entry["sha256"],
-        size=int(entry["size"]),
-    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
+            repo_root = fetch_github_repo(repo, ref, Path(tmp))
+            result = write_direct_skill_package(repo_root, args.skill, output_dir, repo, ref, args.json)
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
+        emit_structured_error(args.skill, f"could not download GitHub repo {repo}@{ref}: {exc}", args.json)
     if args.json:
         print(json.dumps(asdict(result), indent=2))
     else:
-        print(package)
-
-
-def parse_timestamp(value: str) -> datetime:
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        fail(f"invalid packages generated_at timestamp: {value!r}")
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
-
-
-def load_packages_index(path: Path) -> dict:
-    try:
-        packages = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        fail(f"could not read packages JSON: {exc}")
-    if packages.get("schema_version") != PACKAGES_SCHEMA_VERSION:
-        fail(f"unsupported packages schema_version {packages.get('schema_version')!r}")
-    generated_at = parse_timestamp(str(packages.get("generated_at", "")))
-    max_age = int(packages.get("max_age_seconds", 0))
-    if max_age <= 0:
-        fail("packages max_age_seconds must be positive")
-    age = (datetime.now(timezone.utc) - generated_at.astimezone(timezone.utc)).total_seconds()
-    if age > max_age:
-        fail("packages index is expired")
-    return packages
-
-
-def canonical_json_bytes(value: dict) -> bytes:
-    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
-
-
-def normalized_signature_bytes(path: Path) -> bytes:
-    try:
-        return path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
-    except OSError as exc:
-        fail(f"packages signature is missing: {path}: {exc}")
-
-
-def verify_packages_signature(packages: dict, signature_path: Path, allowed_signers: Path) -> None:
-    if shutil.which("ssh-keygen") is None:
-        fail("ssh-keygen is required for package index verification")
-    if not signature_path.is_file():
-        fail(f"packages signature is missing: {signature_path}")
-    if not allowed_signers.is_file():
-        fail(f"allowed signers file is missing: {allowed_signers}")
-    if not allowed_signers.read_text(encoding="utf-8").strip():
-        fail(f"allowed signers file is empty: {allowed_signers}")
-    with tempfile.TemporaryDirectory(prefix="skills-hub-packages-sig-") as tmp:
-        normalized_sig = Path(tmp) / "packages.json.sig"
-        normalized_sig.write_bytes(normalized_signature_bytes(signature_path))
-        result = subprocess.run(
-            [
-                "ssh-keygen",
-                "-Y",
-                "verify",
-                "-f",
-                str(allowed_signers),
-                "-I",
-                SIGNING_IDENTITY,
-                "-n",
-                SIGNING_NAMESPACE,
-                "-s",
-                str(normalized_sig),
-            ],
-            input=canonical_json_bytes(packages),
-            capture_output=True,
-            check=False,
-        )
-    if result.returncode != 0:
-        detail = result.stderr.decode("utf-8", errors="replace").strip()
-        fail(f"packages signature verification failed: {detail}")
-
-
-def package_index_entry(packages: dict, skill: str) -> dict:
-    for entry in packages.get("packages", []):
-        if entry.get("name") == skill:
-            return entry
-    fail(f"skill {skill!r} not found in packages index")
-
-
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+        print(result.package_path)
 
 
 def sha256_file(path: Path) -> str:
@@ -741,72 +620,6 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def decode_base64_file(path: Path) -> bytes:
-    try:
-        return base64.b64decode(path.read_text(encoding="ascii").encode("ascii"), validate=False)
-    except (OSError, UnicodeDecodeError, binascii.Error) as exc:
-        fail(f"could not decode base64 package text: {exc}")
-
-
-def decode_package_from_text(
-    *,
-    skill: str,
-    packages_path: Path,
-    signature_path: Path | None,
-    allowed_signers: Path | None,
-    b64_path: Path,
-    output_dir: Path,
-) -> DecodeResult:
-    packages = load_packages_index(packages_path)
-    if signature_path:
-        verify_packages_signature(packages, signature_path, allowed_signers)
-    entry = package_index_entry(packages, skill)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    package = output_dir / f"{skill}.skill"
-    data = decode_base64_file(b64_path)
-    try:
-        package.write_bytes(data)
-        expected_size = int(entry.get("size", -1))
-        if len(data) != expected_size:
-            fail(f"size mismatch for {skill}.skill: expected {expected_size}, got {len(data)}")
-        actual_sha = sha256_bytes(data)
-        expected_sha = str(entry.get("sha256", ""))
-        if actual_sha != expected_sha:
-            fail(f"sha256 mismatch for {skill}.skill")
-    except SystemExit:
-        try:
-            package.unlink()
-        except OSError:
-            pass
-        raise
-    base_url = str(packages.get("base_url") or BASE_URL).rstrip("/")
-    return DecodeResult(
-        skill=skill,
-        package_path=str(package),
-        package_url=f"{base_url}/{entry['skill_path']}",
-        b64_url=f"{base_url}/{entry['b64_path']}",
-        sha256=str(entry["sha256"]),
-        size=int(entry["size"]),
-    )
-
-
-def cmd_decode_package(args) -> None:
-    context = read_context()
-    allowed_signers = resolve_allowed_signers(args.allowed_signers, context) if args.signature else None
-    result = decode_package_from_text(
-        skill=args.skill,
-        packages_path=args.packages,
-        signature_path=args.signature,
-        allowed_signers=allowed_signers,
-        b64_path=args.b64,
-        output_dir=args.output_dir,
-    )
-    if args.json:
-        print(json.dumps(asdict(result), indent=2))
-    else:
-        print(result.package_path)
 
 
 def should_copy(path: Path, source_root: Path) -> bool:
@@ -855,13 +668,6 @@ def selected_skill_files(source: Path) -> list[tuple[str, bytes]]:
             continue
         files.append((path.relative_to(source).as_posix(), path.read_bytes()))
     return files
-
-
-def validate_repo(value: str) -> tuple[str, str]:
-    parts = value.split("/")
-    if len(parts) != 2 or not all(parts):
-        fail("--repo must be in owner/name format")
-    return parts[0], parts[1]
 
 
 def github_request(method: str, path: str, token: str, data: dict | None = None, expected: tuple[int, ...] = (200,)):
@@ -971,6 +777,28 @@ def cmd_absorb(args) -> None:
     print(dest)
 
 
+def cmd_record_install(args) -> None:
+    context = read_context()
+    roots = [Path(p) for p in args.install_root] if args.install_root else context_install_roots(context)
+    if not roots:
+        roots = default_install_roots()
+    roots = normalize_install_roots(roots)
+    if not roots:
+        fail(no_install_root_message(args, context))
+    installed = discover_installed(roots)
+    if args.skill not in installed:
+        fail(f"skill '{args.skill}' not found in any install root; cannot record install")
+    item = installed[args.skill][0]
+    install_root = Path(item.root)
+    for parent in [install_root, *install_root.parents]:
+        if parent.name == "skills" and parent.parent in roots:
+            record_install(parent.parent, args.skill, args.content_hash, args.source_ref)
+            print(json.dumps({"recorded": args.skill, "lockfile": str(parent.parent / LOCKFILE_NAME)}))
+            return
+    record_install(roots[0], args.skill, args.content_hash, args.source_ref)
+    print(json.dumps({"recorded": args.skill, "lockfile": str(roots[0] / LOCKFILE_NAME)}))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -980,35 +808,25 @@ def main() -> None:
     inventory.add_argument("--names", help="comma-separated skill names to include")
     inventory.add_argument("--index", type=Path)
     inventory.add_argument("--manifest", type=Path)
-    inventory.add_argument("--signature", type=Path)
-    inventory.add_argument("--packages", type=Path)
-    inventory.add_argument("--packages-signature", type=Path)
-    inventory.add_argument("--base-url")
     inventory.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
     inventory.add_argument("--ref", default=DEFAULT_GITHUB_REF)
-    inventory.add_argument("--allowed-signers", type=Path)
     inventory.add_argument("--json", action="store_true")
     inventory.set_defaults(func=cmd_inventory)
 
     fetch_package = sub.add_parser("fetch-package")
     fetch_package.add_argument("skill")
-    fetch_package.add_argument("--base-url")
     fetch_package.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
     fetch_package.add_argument("--ref", default=DEFAULT_GITHUB_REF)
     fetch_package.add_argument("--output-dir", type=Path, default=Path("outputs") / "skills-hub-packages")
-    fetch_package.add_argument("--allowed-signers", type=Path)
     fetch_package.add_argument("--json", action="store_true")
     fetch_package.set_defaults(func=cmd_fetch_package)
 
-    decode_package = sub.add_parser("decode-package")
-    decode_package.add_argument("skill")
-    decode_package.add_argument("--packages", type=Path, required=True)
-    decode_package.add_argument("--signature", type=Path)
-    decode_package.add_argument("--allowed-signers", type=Path)
-    decode_package.add_argument("--b64", type=Path, required=True)
-    decode_package.add_argument("--output-dir", type=Path, default=Path("outputs") / "skills-hub-packages")
-    decode_package.add_argument("--json", action="store_true")
-    decode_package.set_defaults(func=cmd_decode_package)
+    rec = sub.add_parser("record-install")
+    rec.add_argument("skill")
+    rec.add_argument("--content-hash", required=True, dest="content_hash")
+    rec.add_argument("--source-ref", required=True, dest="source_ref")
+    rec.add_argument("--install-root", action="append", default=[])
+    rec.set_defaults(func=cmd_record_install)
 
     absorb = sub.add_parser("absorb")
     absorb.add_argument("--source", type=Path, required=True)

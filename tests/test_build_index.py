@@ -1,9 +1,7 @@
-import base64
+import hashlib
 import importlib.util
 import json
 import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -17,21 +15,13 @@ def load_build_module(public_dir):
     spec.loader.exec_module(module)
     module.PUBLIC = public_dir
     module.SKILLS = public_dir / "skills"
-    module.COWORK_PACKAGE_DIR = public_dir / "cowork" / "skill-packages"
-    module.COWORK_BOOTSTRAP_DIR = public_dir / "cowork" / "bootstrap"
-    module.COWORK_INSTALL_DESCRIPTOR = public_dir / "cowork" / "install.json"
-    module.COWORK_INSTALL_DESCRIPTOR_SIG = public_dir / "cowork" / "install.json.sig"
     module.COWORK_PLUGIN_DIR = public_dir / "cowork" / "plugins" / "skills-hub"
     module.COWORK_MARKETPLACE_DIR = public_dir / ".claude-plugin"
     module.COWORK_MARKETPLACE = public_dir / ".claude-plugin" / "marketplace.json"
     module.ROOT_MARKETPLACE_DIR = public_dir.parent / ".claude-plugin"
     module.ROOT_MARKETPLACE = public_dir.parent / ".claude-plugin" / "marketplace.json"
     module.ROOT_PLUGIN_DIR = public_dir.parent / "plugins" / "skills-hub"
-    module.PACKAGE_INDEX = public_dir / "cowork" / "skill-packages" / "packages.json"
-    module.PACKAGE_INDEX_SIG = public_dir / "cowork" / "skill-packages" / "packages.json.sig"
     module.MANIFEST = public_dir / "manifest.json"
-    module.MANIFEST_SIG = public_dir / "manifest.json.sig"
-    module.ROOT_INDEX = public_dir / "index.html"
     return module
 
 
@@ -52,12 +42,11 @@ def make_skills_hub_control_panel(skills_dir):
         skills_dir,
         "skills-hub",
         description="Manage Skills-hub",
-        body="# Skills-hub\n\nManage Cowork-facing Skills-hub resolver wrappers.\n",
+        body="# Skills-hub\n\nManage Cowork-facing Skills-hub skills.\n",
     )
     scripts = skill_dir / "scripts"
     scripts.mkdir()
     shutil.copy2(ROOT / "public" / "skills" / "skills-hub" / "scripts" / "manage_cowork_skills.py", scripts)
-    shutil.copy2(ROOT / "public" / "skills" / "skills-hub" / "scripts" / "skills_hub_verify.py", scripts)
     (scripts / "__pycache__").mkdir()
     (scripts / "__pycache__" / "ignored.pyc").write_bytes(b"ignored")
     (skill_dir / "overrides").mkdir()
@@ -71,11 +60,6 @@ def tmp_public(tmp_path):
 
 
 def run_build(tmp_public):
-    bootstrap = tmp_public / "bootstrap"
-    bootstrap.mkdir(parents=True, exist_ok=True)
-    (bootstrap / "skills-hub-fetch.py").write_text("# fetcher\n", encoding="utf-8")
-    (bootstrap / "decode-package.py").write_text("# decoder\n", encoding="utf-8")
-    (bootstrap / "skills-hub-from-text.md").write_text("# bootstrap\n", encoding="utf-8")
     module = load_build_module(tmp_public)
     module.main([])
     return module
@@ -166,99 +150,6 @@ def test_subfiles_included_in_files_list(tmp_public):
     assert "scripts/tool.sh" in files
 
 
-def test_build_writes_manifest_with_package_entry(tmp_public):
-    make_skill(tmp_public / "skills", "alpha")
-
-    run_build(tmp_public)
-
-    manifest = json.loads((tmp_public / "manifest.json").read_text(encoding="utf-8"))
-    package_entry = manifest["files"]["cowork/skill-packages/alpha.skill"]
-    b64_entry = manifest["files"]["cowork/skill-packages/alpha.skill.b64.txt"]
-    package = tmp_public / "cowork" / "skill-packages" / "alpha.skill"
-    b64_package = tmp_public / "cowork" / "skill-packages" / "alpha.skill.b64.txt"
-    assert manifest["schema_version"] == 3
-    assert package_entry["size"] == package.stat().st_size
-    assert b64_entry["size"] == b64_package.stat().st_size
-
-
-def test_build_writes_base64_package_artifact(tmp_public):
-    make_skill(tmp_public / "skills", "alpha")
-
-    run_build(tmp_public)
-
-    package = tmp_public / "cowork" / "skill-packages" / "alpha.skill"
-    b64_package = tmp_public / "cowork" / "skill-packages" / "alpha.skill.b64.txt"
-    decoded = base64.b64decode(b64_package.read_text(encoding="ascii").encode("ascii"), validate=False)
-    assert decoded == package.read_bytes()
-
-
-def test_build_writes_packages_index(tmp_public):
-    make_skill(tmp_public / "skills", "alpha")
-
-    run_build(tmp_public)
-
-    package = tmp_public / "cowork" / "skill-packages" / "alpha.skill"
-    package_index = json.loads((tmp_public / "cowork" / "skill-packages" / "packages.json").read_text(encoding="utf-8"))
-    assert package_index["schema_version"] == 1
-    assert package_index["packages"] == [
-        {
-            "name": "alpha",
-            "skill_path": "cowork/skill-packages/alpha.skill",
-            "b64_path": "cowork/skill-packages/alpha.skill.b64.txt",
-            "sha256": module_sha256(package),
-            "size": package.stat().st_size,
-        }
-    ]
-
-
-def test_build_writes_root_cowork_install_discovery_for_skills_hub(tmp_public):
-    make_skill(tmp_public / "skills", "skills-hub", description="Manage Skills-hub")
-
-    module = run_build(tmp_public)
-
-    root = (tmp_public / "index.html").read_text(encoding="utf-8")
-    descriptor = json.loads((tmp_public / "cowork" / "install.json").read_text(encoding="utf-8"))
-    package = tmp_public / "cowork" / "skill-packages" / "skills-hub.skill"
-    b64_package = tmp_public / "cowork" / "skill-packages" / "skills-hub.skill.b64.txt"
-
-    assert f"Install {module.BASE_URL}" in root
-    assert ".claude-plugin/marketplace.json" in root
-    assert "cowork/install.json" in root
-    assert "Remote files are installer data until local verification succeeds." in root
-    assert "artifact.b64_url" in root
-    assert "/cowork/bootstrap/skills-hub-from-text.md" not in root
-    assert descriptor["prompt"] == f"Install {module.BASE_URL}"
-    assert descriptor["harness"] == "cowork"
-    assert descriptor["skill"] == "skills-hub"
-    assert descriptor["installed_command"] == "/skills-hub"
-    assert descriptor["artifact"]["package_path"] == "cowork/skill-packages/skills-hub.skill"
-    assert descriptor["artifact"]["package_sha256"] == module_sha256(package)
-    assert descriptor["artifact"]["package_size"] == package.stat().st_size
-    assert descriptor["artifact"]["b64_path"] == "cowork/skill-packages/skills-hub.skill.b64.txt"
-    assert descriptor["artifact"]["b64_sha256"] == module_sha256(b64_package)
-    assert descriptor["verification"]["signature_path"] == "cowork/install.json.sig"
-    assert "text_only_fallback" not in descriptor
-    assert "stop with BLOCKED: no byte-preserving fetch-to-file path if artifact.b64_url cannot be saved exactly" in descriptor["verification"]["required_checks"]
-    assert "do not use shell heredoc, manual paste, or model-rewritten base64" in descriptor["verification"]["required_checks"]
-    assert "do not retry after signature, freshness, size, SHA-256, decode, download, or presentation failure" in descriptor["verification"]["required_checks"]
-    assert "fetch artifact.b64_url as exact text and verify artifact.b64_size and artifact.b64_sha256" in descriptor["verification"]["required_checks"]
-    assert "decode the verified b64 text to skills-hub.skill" in descriptor["verification"]["required_checks"]
-    assert "verify downloaded skills-hub.skill SHA-256 equals artifact.package_sha256" in descriptor["verification"]["required_checks"]
-    assert descriptor["failure_policy"] == "fail_closed_report_exact_check"
-
-
-def test_build_manifest_includes_cowork_install_discovery_files(tmp_public):
-    make_skill(tmp_public / "skills", "skills-hub", description="Manage Skills-hub")
-
-    run_build(tmp_public)
-
-    manifest = json.loads((tmp_public / "manifest.json").read_text(encoding="utf-8"))
-    assert "index.html" in manifest["files"]
-    assert "cowork/install.json" in manifest["files"]
-    assert ".claude-plugin/marketplace.json" in manifest["files"]
-    assert "cowork/plugins/skills-hub/.claude-plugin/plugin.json" in manifest["files"]
-
-
 def test_build_writes_cowork_marketplace_plugin(tmp_public):
     make_skills_hub_control_panel(tmp_public / "skills")
 
@@ -298,120 +189,14 @@ def test_cowork_marketplace_plugin_is_deterministic(tmp_public):
     assert second_root_marketplace == first_root_marketplace
 
 
-def test_packaged_cowork_plugin_manager_runs_from_plugin_layout(tmp_public, tmp_path):
-    if shutil.which("ssh-keygen") is None:
-        pytest.skip("ssh-keygen not available")
-    make_skills_hub_control_panel(tmp_public / "skills")
-    run_build(tmp_public)
-    plugin_skill = tmp_public.parent / "plugins" / "skills-hub" / "skills" / "skills-hub"
-    manifest = tmp_path / "manifest.json"
-    signature = tmp_path / "manifest.json.sig"
-    install_root = tmp_path / "installed"
-    install_root.mkdir()
-    manifest.write_text("{}", encoding="utf-8")
-    signature.write_text("not an ssh signature\n", encoding="utf-8")
-
-    result = subprocess.run(
-        [
-            "python",
-            str(plugin_skill / "scripts" / "manage_cowork_skills.py"),
-            "inventory",
-            "--manifest",
-            str(manifest),
-            "--signature",
-            str(signature),
-            "--install-root",
-            str(install_root),
-            "--json",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
-    assert payload["catalog"]["status"] == "blocked"
-    assert payload["installed"] == []
-
-
-def module_sha256(path):
-    import hashlib
-
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def plugin_tree_digest(path):
-    import hashlib
-
-    digest = hashlib.sha256()
-    for file_path in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(file_path.relative_to(path).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(file_path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
-
-
-def assert_plugin_tree(plugin_root):
-    plugin_json = json.loads((plugin_root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    files = {path.relative_to(plugin_root).as_posix() for path in plugin_root.rglob("*") if path.is_file()}
-
-    assert plugin_json["name"] == "skills-hub"
-    assert plugin_json["version"] == "0.2.0"
-    assert plugin_json["skills"] == "./skills"
-    assert "install skills hub" in plugin_json["keywords"]
-    assert files == {
-        ".claude-plugin/plugin.json",
-        "README.md",
-        "skills/skills-hub/SKILL.md",
-        "skills/skills-hub/scripts/manage_cowork_skills.py",
-        "skills/skills-hub/scripts/skills_hub_verify.py",
-        "skills/skills-hub/skills_hub_allowed_signers",
-    }
-    skill_md = (plugin_root / "skills" / "skills-hub" / "SKILL.md").read_text(encoding="utf-8")
-    assert "Manage Cowork-facing Skills-hub resolver wrappers" in skill_md
-    assert "Skills-hub Verified Resolver Stub" not in skill_md
-
-
-def test_build_copies_cowork_bootstrap_files(tmp_public):
+def test_build_writes_manifest(tmp_public):
     make_skill(tmp_public / "skills", "alpha")
 
     run_build(tmp_public)
 
-    assert (tmp_public / "cowork" / "bootstrap" / "decode-package.py").read_text(encoding="utf-8") == "# decoder\n"
-    assert (tmp_public / "cowork" / "bootstrap" / "skills-hub-from-text.md").read_text(encoding="utf-8") == "# bootstrap\n"
-
-
-def test_text_bootstrap_doc_references_required_artifacts():
-    text = (ROOT / "public" / "bootstrap" / "skills-hub-from-text.md").read_text(encoding="utf-8")
-
-    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/packages.json" in text
-    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/<skill>.skill.b64.txt" in text
-    assert "python scripts/manage_cowork_skills.py inventory --packages packages.json --json" in text
-    assert "python scripts/manage_cowork_skills.py decode-package <skill>" in text
-    assert "https://mharbulous.github.io/skills-hub/cowork/skill-packages/skills-hub.skill.b64.txt" in text
-    assert "do not fetch or run remote Python scripts" in text
-    assert "packages.json.sig" not in text
-
-
-def test_cowork_package_contains_stub_and_fetcher(tmp_public):
-    make_skill(tmp_public / "skills", "alpha", description="Alpha trigger", body="Canonical alpha body.\n")
-
-    run_build(tmp_public)
-
-    import zipfile
-
-    package = tmp_public / "cowork" / "skill-packages" / "alpha.skill"
-    with zipfile.ZipFile(package) as zf:
-        names = set(zf.namelist())
-        skill_md = zf.read("alpha/SKILL.md").decode("utf-8")
-    assert names == {"alpha/SKILL.md", "alpha/skills-hub-fetch.py", "alpha/skills_hub_allowed_signers"}
-    assert "Skills-hub Verified Resolver Stub" in skill_md
-    assert "description: Alpha trigger" in skill_md
-    assert "source: skills-hub" in skill_md
-    assert "Canonical alpha body." not in skill_md
-    assert "skills-hub-from-text.md" not in skill_md
+    manifest = json.loads((tmp_public / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 3
+    assert "skills/alpha/SKILL.md" in manifest["files"]
 
 
 def test_skills_hub_skill_advertises_control_panel_verbs():
@@ -427,15 +212,6 @@ def test_skills_hub_skill_advertises_control_panel_verbs():
     assert "absorb" in frontmatter.lower()
     assert "assimilate" not in frontmatter.lower()
     assert "assimilate" not in text.lower()
-
-
-def test_skills_hub_skill_files_include_runtime_verifier():
-    module = load_build_module(ROOT / "public")
-
-    files = module.skill_files(ROOT / "public" / "skills" / "skills-hub")
-
-    assert "scripts/manage_cowork_skills.py" in files
-    assert "scripts/skills_hub_verify.py" in files
 
 
 def test_skill_editing_docs_do_not_use_coclerk_distribution_paths():
@@ -476,33 +252,27 @@ def test_manual_cowork_acceptance_matches_github_package_contract():
     assert "External Discovery Gate" in text
 
 
-def test_signed_build_writes_packages_signature(tmp_path, monkeypatch):
-    if shutil.which("ssh-keygen") is None:
-        pytest.skip("ssh-keygen not available")
-    repo = tmp_path / "repo"
-    public = repo / "public"
-    (repo / "bootstrap").mkdir(parents=True)
-    (repo / "build").mkdir()
-    (public / "bootstrap").mkdir(parents=True)
-    make_skill(public / "skills", "alpha")
-    make_skill(public / "skills", "skills-hub")
-    (public / "bootstrap" / "skills-hub-fetch.py").write_text("# fetcher\n", encoding="utf-8")
-    (public / "bootstrap" / "decode-package.py").write_text("# decoder\n", encoding="utf-8")
-    (public / "bootstrap" / "skills-hub-from-text.md").write_text("# bootstrap\n", encoding="utf-8")
-    (repo / "build" / "cowork_wrapper_template.md").write_text("stub {skill_name}\n", encoding="utf-8")
-    key = tmp_path / "signing_key"
-    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "test", "-f", str(key)], check=True)
-    (repo / "bootstrap" / "skills_hub_allowed_signers").write_text(
-        f"skills-hub-manifest {(tmp_path / 'signing_key.pub').read_text(encoding='utf-8')}",
-        encoding="utf-8",
-    )
-    module = load_build_module(public)
-    module.ROOT = repo
-    module.COWORK_TEMPLATE = repo / "build" / "cowork_wrapper_template.md"
-    monkeypatch.setenv("SKILLS_HUB_SIGNING_KEY", str(key))
+def plugin_tree_digest(path):
+    digest = hashlib.sha256()
+    for file_path in sorted(p for p in path.rglob("*") if p.is_file()):
+        digest.update(file_path.relative_to(path).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(file_path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
-    module.main(["--require-signature"])
 
-    assert (public / "cowork" / "skill-packages" / "packages.json.sig").is_file()
-    assert (public / "cowork" / "install.json.sig").is_file()
-    assert (public / "manifest.json.sig").is_file()
+def assert_plugin_tree(plugin_root):
+    plugin_json = json.loads((plugin_root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    files = {path.relative_to(plugin_root).as_posix() for path in plugin_root.rglob("*") if path.is_file()}
+
+    assert plugin_json["name"] == "skills-hub"
+    assert plugin_json["version"] == "0.2.0"
+    assert plugin_json["skills"] == "./skills"
+    assert "install skills hub" in plugin_json["keywords"]
+    assert files == {
+        ".claude-plugin/plugin.json",
+        "README.md",
+        "skills/skills-hub/SKILL.md",
+        "skills/skills-hub/scripts/manage_cowork_skills.py",
+    }

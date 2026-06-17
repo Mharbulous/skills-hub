@@ -25,12 +25,9 @@ Do NOT proceed to assembly until validation passes.
 
 ## Skill directory
 
-When this skill is loaded from Skills-hub in Cowork, the wrapper first runs a
-verified resolver and then reads this `SKILL.md` from a local cache directory.
-Treat the directory containing this verified `SKILL.md` as `SKILL_DIR`. Resolve
-`references/`, `scripts/assemble.py`, and `scripts/rename_exhibits.py` relative
-to `SKILL_DIR`; do not search for or trust sibling files beside the wrapper
-stub.
+Treat the directory containing this `SKILL.md` as `SKILL_DIR`. Resolve
+`references/`, `scripts/assemble.py`, and `scripts/rename_exhibits.py`
+relative to `SKILL_DIR`.
 
 ## Solicitor Details (Hardcoded)
 

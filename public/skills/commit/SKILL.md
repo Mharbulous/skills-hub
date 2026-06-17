@@ -43,7 +43,7 @@ Final output must be exactly one of these JSON structures:
 
 ## Workflow
 
-1. **Materialize this skill folder** from the full install or Skills-hub per-skill tarball, then treat that extracted folder as `SKILL_DIR`.
+1. **Locate this skill's directory** and treat it as `SKILL_DIR`.
 2. **Run:** `bash "$SKILL_DIR/scripts/gather-context.sh"`
    - JSON includes `prev_commit_message`, `prev_commit_diff_stat`, `prev_commit_pushed`
 3. **Review previous commit** — skip if `prev_commit_pushed` is true OR `prev_commit_message` is empty.

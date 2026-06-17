@@ -16,12 +16,10 @@ which precondition is unmet.
    repository before continuing.
 2. **Fresh chat.** This test must run in a new Cowork chat so the skill is
    loaded from scratch.
-3. **Network access.** `mharbulous.github.io/skills-hub` is reachable. Test with a quick
-   fetch of `https://mharbulous.github.io/skills-hub/manifest.json` — a 200 response
-   confirms connectivity. If it fails, note this and plan to test degraded-mode
+3. **Network access.** `github.com` is reachable. Test with a quick
+   fetch of the GitHub repo archive — connectivity is confirmed if the
+   download succeeds. If it fails, note this and plan to test degraded-mode
    inventory (Phase 2b) instead of the normal flow.
-4. **ssh-keygen available.** Run `ssh-keygen -h` to confirm it is on PATH.
-   Signature verification requires it.
 
 Tell the tester which preconditions passed and which need action.
 
@@ -63,9 +61,8 @@ Record: PASS or FAIL with details.
 
 ## Phase 2: Inventory
 
-**Goal:** `/skills-hub inventory` runs the management script, contacts
-`mharbulous.github.io/skills-hub` for a signed manifest, and reports each cataloged skill
-with a status.
+**Goal:** `/skills-hub inventory` runs the management script, downloads the
+GitHub repo archive, and reports each cataloged skill with a status.
 
 ### Steps
 
@@ -80,18 +77,17 @@ with a status.
 
 The output is a JSON array. Each element has these fields:
 - `name` — skill name (string)
-- `status` — one of: `current`, `missing`, `stale-wrapper`, `orphan`, `conflict`
+- `status` — one of: `current`, `missing`, `stale`, `modified`, `diverged`, `orphan`, `conflict`
 - `evidence` — human-readable explanation (string)
 - `path` — filesystem path (string, may be empty for `missing`)
 
 There must be at least one row. Most skills should show `missing` on a fresh
 install (before any `/skills-hub install` has been run). If skills were
-previously installed, they may show `current` or `stale-wrapper`.
+previously installed, they may show `current` or `stale`.
 
 ### Expected — Degraded Mode (catalog blocked)
 
-If the manifest is unreachable or fails signature/freshness verification, the
-output is a JSON object with:
+If the GitHub repo is unreachable, the output is a JSON object with:
 ```json
 {
   "catalog": { "status": "blocked", "error": "<reason>" },
@@ -100,8 +96,8 @@ output is a JSON object with:
 ```
 
 The `installed` array lists locally-found skills with `local_status` values
-(`skills-hub-wrapper`, `stale-wrapper-marker`, `unrecognized`). This is
-acceptable — it means degraded mode works correctly.
+(`installed`, `conflict`). This is acceptable — it means degraded mode works
+correctly. Freshness cannot be verified without the catalog.
 
 ### Checkpoint
 
@@ -115,9 +111,9 @@ any skills yet, everything except `skills-hub` itself should be `missing`).
 Record: PASS or FAIL with details.
 
 **Important:** Note one skill name with status `missing` — you will use it in
-Phase 3. If no skills are `missing`, note one with status `stale-wrapper` for
-Phase 4 instead. If all are `current` and none are stale, report this and skip
-to Phase 5.
+Phase 3. If no skills are `missing`, note one with status `stale` for Phase 4
+instead. If all are `current` and none are stale, report this and skip to
+Phase 5.
 
 ---
 
@@ -138,7 +134,7 @@ about to install and ask for confirmation before proceeding.
 2. Cowork should:
    a. Run inventory first (per SKILL.md instructions).
    b. Confirm the skill is `missing` or ask for bounded confirmation if `current`.
-   c. Run `python scripts/manage_cowork_skills.py fetch-package <skill> --json`.
+   c. Run `python scripts/manage_cowork_skills.py fetch-package <skill> --output-dir <writable dir> --json`.
    d. Present the returned `package_path` via `mcp__cowork__present_files`.
 3. A **Save skill** card should appear in the chat.
 
@@ -154,11 +150,13 @@ Wait for the tester to confirm they clicked Save.
 After the tester confirms Save:
 1. Run `/skills-hub inventory` again.
 2. The skill that was just installed must now show `status: "current"`.
+3. Verify that `record-install` was called — `skills-hub-lock.json` should
+   exist in the install root with an entry for the installed skill.
 
 ### Failures
 
-- **FAIL** if `fetch-package` exits with a non-zero code (signature, hash,
-  size, or freshness check failed).
+- **FAIL** if `fetch-package` exits with a non-zero code (download failed or
+  skill not found).
 - **FAIL** if no Save-skill card appears (the path was printed as bare text
   instead of presented via `mcp__cowork__present_files`).
 - **FAIL** if inventory after Save still shows `missing` for the skill.
@@ -175,26 +173,26 @@ Record: PASS, FAIL, or EXPECTED LIMITATION with details.
 
 ---
 
-## Phase 4: Update a Stale Wrapper
+## Phase 4: Update a Stale Skill
 
-**Goal:** `/skills-hub update <skill>` replaces a stale wrapper with the
-current verified package.
+**Goal:** `/skills-hub update <skill>` replaces a stale skill with the
+current package from GitHub.
 
 ### Applicability
 
 Run this phase only if Phase 2 inventory showed at least one skill with
-`status: "stale-wrapper"`. If none exist, tell the tester: *"No stale
-wrappers detected — skipping Phase 4."* and move to Phase 5.
+`status: "stale"`. If none exist, tell the tester: *"No stale skills
+detected — skipping Phase 4."* and move to Phase 5.
 
 ### Steps
 
-1. Pick a `stale-wrapper` skill from inventory.
+1. Pick a `stale` skill from inventory.
 2. Tell the tester which skill you will update and ask for confirmation.
 3. Send `/skills-hub update <skill>`.
 4. Cowork should:
    a. Run inventory first.
-   b. Confirm the skill is `stale-wrapper`.
-   c. Run `fetch-package <skill> --json`.
+   b. Confirm the skill is `stale`.
+   c. Run `fetch-package <skill> --output-dir <writable dir> --json`.
    d. Present the Save-skill card.
 
 ### User Action Required
@@ -211,7 +209,7 @@ After Save:
 ### Failures
 
 Same as Phase 3, plus:
-- **FAIL** if Cowork attempts to update a skill that is not `stale-wrapper`.
+- **FAIL** if Cowork attempts to update a skill that is not `stale`.
 
 ### Checkpoint
 
@@ -223,28 +221,27 @@ Record: PASS, FAIL, or EXPECTED LIMITATION.
 
 ## Phase 5: Update All
 
-**Goal:** `/skills-hub update all` batch-updates every `stale-wrapper` skill.
+**Goal:** `/skills-hub update all` batch-updates every `stale` skill.
 
 ### Applicability
 
-Run this phase only if inventory shows at least one `stale-wrapper` skill. If
-Phase 4 already updated the only stale wrapper (and no others remain), tell the
-tester: *"No remaining stale wrappers — skipping Phase 5."* and move to
-Phase 6.
+Run this phase only if inventory shows at least one `stale` skill. If Phase 4
+already updated the only stale skill (and no others remain), tell the tester:
+*"No remaining stale skills — skipping Phase 5."* and move to Phase 6.
 
 ### Steps
 
 1. Send `/skills-hub update all`.
 2. Cowork should:
    a. Run inventory.
-   b. List all `stale-wrapper` targets.
+   b. List all `stale` targets.
    c. Ask for a single bounded confirmation.
    d. Run `fetch-package` for each.
    e. Present one Save-skill card per target.
 
 ### User Action Required
 
-Tell the tester: *"Save-skill cards should appear for each stale wrapper.
+Tell the tester: *"Save-skill cards should appear for each stale skill.
 Please click **Save skill** on each one."*
 
 ### Verification
@@ -255,7 +252,7 @@ After all Saves:
 
 ### Checkpoint
 
-Ask the tester: *"All stale wrappers are now current. Correct?"*
+Ask the tester: *"All stale skills are now current. Correct?"*
 
 Record: PASS, FAIL, or EXPECTED LIMITATION.
 
@@ -269,7 +266,7 @@ Record: PASS, FAIL, or EXPECTED LIMITATION.
 
 1. Send `/skills-hub install this-skill-does-not-exist`.
 2. `fetch-package` must return structured JSON
-   (`{"error": "skill not found in catalog", "skill": "this-skill-does-not-exist"}`)
+   (`{"error": "skill not found in GitHub repo", "skill": "this-skill-does-not-exist"}`)
    and exit non-zero — no raw Python traceback. The install must not proceed.
 3. No Save-skill card should appear.
 
@@ -279,7 +276,7 @@ Ask the tester: *"Did the install correctly refuse with an error message?"*
 
 1. Pick a skill that shows `status: "current"` in the latest inventory.
 2. Send `/skills-hub update <that-skill>`.
-3. The response must report that the skill is not `stale-wrapper` and stop.
+3. The response must report that the skill is not `stale` and stop.
 
 Ask the tester: *"Did the update correctly refuse because the skill is
 current?"*
@@ -290,7 +287,7 @@ This sub-phase tests degraded mode. Skip if network was already down during
 Phase 2.
 
 1. If possible, disconnect from the network or ask the tester to temporarily
-   block `mharbulous.github.io/skills-hub`.
+   block `github.com`.
 2. Run `/skills-hub inventory`.
 3. Expect a blocked-catalog JSON object with a clear `error` field.
 4. Run `/skills-hub install <any-skill>`.
@@ -300,6 +297,21 @@ Ask the tester: *"With the catalog blocked, did inventory show a degraded
 response and did install correctly refuse?"*
 
 Remind the tester to restore network access.
+
+### 6d: Modified Status Detection (Optional)
+
+This sub-phase requires a skill installed in Phase 3 with a lockfile entry.
+
+1. Manually edit the installed skill's `SKILL.md` (add a comment line at the
+   end).
+2. Run `/skills-hub inventory`.
+3. The edited skill should show `status: "modified"` with evidence mentioning
+   "locally edited."
+4. Run `/skills-hub update <that-skill>`.
+5. It should warn that local edits will be lost and ask for confirmation.
+
+Ask the tester: *"Did the modified skill show the correct status and did
+update warn about local edits?"*
 
 ### Checkpoint
 
@@ -365,11 +377,12 @@ After all phases complete, present a summary table:
 | 1     | Bare command              |        |       |
 | 2     | Inventory                 |        |       |
 | 3     | Install a skill           |        |       |
-| 4     | Update stale wrapper      |        |       |
+| 4     | Update stale skill        |        |       |
 | 5     | Update all                |        |       |
 | 6a    | Install non-existent      |        |       |
 | 6b    | Update current skill      |        |       |
 | 6c    | Blocked catalog           |        |       |
+| 6d    | Modified status           |        |       |
 | 7     | Cross-session persistence |        |       |
 | 8     | Installed skill works     |        |       |
 

@@ -28,8 +28,8 @@ Generated harness outputs under `public/claude/`, `public/codex/`,
 `public/cowork/`, Cowork `.skill` packages, runtime plugin caches, and product
 repo wrapper copies are not source. Do not edit them as the delivery path.
 
-If the user asks to inventory, install, update, replace stale wrappers, import
-Cowork packages, or manage resolver wrappers, stop and use `skills-hub` instead.
+If the user asks to inventory, install, update, replace stale skills, import
+Cowork packages, or manage installed skills, stop and use `skills-hub` instead.
 
 ## Workflow
 

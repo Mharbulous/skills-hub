@@ -1,12 +1,11 @@
 ---
 name: skills-hub
 description: >
-  Manage Skills-hub resolver-wrapper skills for Cowork. Use for /skills-hub,
+  Manage Skills-hub skills for Cowork. Use for /skills-hub,
   /skills-hub inventory, /skills-hub install, /skills-hub update,
   /skills-hub absorb, installing Cowork Skills-hub skills, updating stale
-  Myskillium or old Skills-hub wrapper skills, building Cowork .skill
-  packages from the public GitHub repo, and absorbing local skills into the
-  Skills-hub repo.
+  skills, building Cowork .skill packages from the public GitHub repo,
+  and absorbing local skills into the Skills-hub repo.
 ---
 
 # Skills-hub
@@ -64,8 +63,8 @@ python scripts/manage_cowork_skills.py inventory --names vision,handover --json
 Branch on the JSON shape:
 
 - JSON array: report each row's `status`, `name`, `evidence`, and `path`.
-  Valid statuses are `current`, `missing`, `stale-wrapper`, `orphan`, and
-  `conflict`.
+  Valid statuses are `current`, `missing`, `stale`, `modified`, `diverged`,
+  `orphan`, and `conflict`.
 - JSON object with `catalog.status == "blocked"`: handle as described under
   [Blocked catalog](#blocked-catalog) below. Do not install or update anything
   while the GitHub repo is unreachable.
@@ -103,10 +102,25 @@ non-zero. Report that plainly and stop; do not retry.
 
 On success the script downloads the GitHub repo archive, packages the requested
 `public/skills/<skill>` directory as a full Cowork `.skill`, and writes it to
-the output folder. Present the returned `package_path` with
-`mcp__cowork__present_files` so Cowork shows a Save-skill card. Tell the user to
-click **Save skill** and rerun `/skills-hub inventory` for confirmation. Do not
-print a bare path as the normal import mechanism.
+the output folder. The JSON result includes `content_hash` and `source_ref`
+fields — save these for the `record-install` step below.
+
+Present the returned `package_path` with `mcp__cowork__present_files` so Cowork
+shows a Save-skill card. Tell the user to click **Save skill** and rerun
+`/skills-hub inventory` for confirmation. Do not print a bare path as the
+normal import mechanism.
+
+After inventory confirms `current`, record the install in the lockfile:
+
+```bash
+python scripts/manage_cowork_skills.py record-install <skill> \
+  --content-hash <content_hash from fetch-package result> \
+  --source-ref <source_ref from fetch-package result>
+```
+
+This writes a `skills-hub-lock.json` entry so future inventory can distinguish
+`stale` (hub updated) from `modified` (user edited locally). If `record-install`
+fails, log the error but do not block the install — the lockfile is optional.
 
 ### `/skills-hub update`
 
@@ -123,7 +137,7 @@ plugin is already up to date. Changes take effect on the next Cowork session.
 
 **Path 2 — Fetch-package fallback.** If the plugin Update button is unavailable
 or the user prefers this path, build the skills-hub package directly from
-GitHub. Do not run inventory first — skip the stale-wrapper check and go
+GitHub. Do not run inventory first — skip the stale check and go
 straight to fetch-package:
 
 ```bash
@@ -135,9 +149,9 @@ as a Save-skill card. Tell the user to click **Save skill**. Changes take effect
 on the next Cowork session.
 
 After saving via Path 2, the user will have both the plugin-delivered copy and a
-resolver-wrapper copy of skills-hub. The resolver-wrapper copy takes precedence.
-On the next `/skills-hub inventory`, skills-hub may show `conflict` status —
-this is expected and benign.
+saved copy of skills-hub. The saved copy takes precedence. On the next
+`/skills-hub inventory`, skills-hub may show `conflict` status (multiple
+installed copies) — this is expected and benign.
 
 **Errors (Path 2 only):**
 
@@ -152,12 +166,22 @@ this is expected and benign.
 
 ### `/skills-hub update <skill>`
 
-Run inventory first. If inventory returns a blocked catalog object, handle it as
-described under [Blocked catalog](#blocked-catalog) and stop. If the named skill
-is absent from the GitHub catalog, report that and stop.
+Run inventory first — **as a single sequential step; do not run `fetch-package`
+in parallel with inventory**. Use `--names <skill>` to keep output small:
 
-If the skill is installed but not `stale-wrapper`, report its current status and
-ask for bounded confirmation before replacing it. Then run:
+```bash
+python scripts/manage_cowork_skills.py inventory --names <skill> --json
+```
+
+If inventory returns a blocked catalog object, handle it as described under
+[Blocked catalog](#blocked-catalog) and **stop immediately — do not run any
+further commands**. If the named skill is absent from the GitHub catalog,
+report that and stop.
+
+If the skill shows `modified` or `diverged`, warn the user that updating will
+overwrite their local edits and ask for explicit confirmation before proceeding.
+If the skill is `current`, ask for bounded confirmation before re-importing.
+Then run:
 
 ```bash
 python scripts/manage_cowork_skills.py fetch-package <skill> --output-dir <writable dir> --json
@@ -167,18 +191,27 @@ Present the returned `package_path` with `mcp__cowork__present_files` as one
 Save-skill card. The `--output-dir` and error-handling notes from the install
 section apply here too.
 
+After the user clicks Save and inventory confirms `current`, run
+`record-install` as described in the install section to update the lockfile.
+
 ### `/skills-hub update all`
 
 Run inventory first. If inventory returns a blocked catalog object, handle it as
 described under [Blocked catalog](#blocked-catalog) and stop.
 
-Target rows with `status == "stale-wrapper"`. Ignore `missing` and `orphan`.
+Target rows with `status == "stale"`. Ignore `missing` and `orphan`.
+Skip `modified` and `diverged` rows — these have local edits that would be
+lost. If the user explicitly asks to force-update all, warn that local edits
+on modified/diverged skills will be lost and ask for confirmation.
 For `current` or `conflict` rows, include them only if the user explicitly asks
-to replace every installed copy. If no stale wrappers exist, say so and stop.
+to replace every installed copy. If no stale skills exist, say so and stop.
 Otherwise show the full target list once and ask for a single bounded
 confirmation before fetching packages. For each confirmed target, run
 `fetch-package <skill> --output-dir <writable dir> --json` and present one
 Save-skill card with `mcp__cowork__present_files`.
+
+After each Save + inventory confirmation, run `record-install` as described in
+the install section.
 
 ### `/skills-hub absorb <skill>`
 

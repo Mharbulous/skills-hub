@@ -518,9 +518,7 @@ result = subprocess.run(
 output = json.loads(result.stdout)
 ```
 
-Set `SKILL_DIR` to the directory containing the verified `SKILL.md` that was
-read for this skill. In Cowork, this is the directory printed by the
-Skills-hub resolver, minus the trailing `/SKILL.md`.
+Set `SKILL_DIR` to the directory containing this skill's `SKILL.md`.
 
 The script returns JSON with `success`, `renames_completed`, `errors`,
 and a `verification` dict showing each file's size and header bytes.

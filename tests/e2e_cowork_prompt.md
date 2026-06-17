@@ -33,11 +33,11 @@ Ask me: "Did the help panel appear correctly without any network activity? (PASS
 
 Run `/skills-hub inventory`. The skill should run `python scripts/manage_cowork_skills.py inventory --json`.
 
-**Normal mode:** Output is a JSON array with rows containing `name`, `status` (`current`/`missing`/`stale-wrapper`/`orphan`/`conflict`), `evidence`, and `path`.
+**Normal mode:** Output is a JSON array with rows containing `name`, `status` (`current`/`missing`/`stale`/`modified`/`diverged`/`orphan`/`conflict`), `evidence`, and `path`.
 
 **Degraded mode:** If the manifest can't be verified, output is `{"catalog": {"status": "blocked", "error": "..."}, "installed": [...]}`. This is acceptable — it means degraded mode works.
 
-Present a summary table of each skill's name and status. Note one `missing` skill for Phase 3 and any `stale-wrapper` skills for Phase 4/5.
+Present a summary table of each skill's name and status. Note one `missing` skill for Phase 3 and any `stale` skills for Phase 4/5.
 
 Ask me: "Does this inventory look correct for your current install state? (PASS/FAIL)"
 
@@ -55,23 +55,23 @@ FAIL if fetch-package errors, if the path is printed as text instead of a Save-s
 
 Tell me: "A Save-skill card should be visible. Please click Save skill."
 
-After I confirm, run `/skills-hub inventory` again. The installed skill must now show `current`.
+After I confirm, run `/skills-hub inventory` again. The installed skill must now show `current`. After confirmation, `record-install` should have been called automatically — verify that `skills-hub-lock.json` exists in the install root.
 
 If inventory still shows `missing`, note it as EXPECTED LIMITATION (Cowork may need a new session to detect new skills) and ask me to verify in a new chat.
 
 Ask me: "The skill now shows current. Correct? (PASS/FAIL/EXPECTED LIMITATION)"
 
-## Phase 4: Update a Stale Wrapper
+## Phase 4: Update a Stale Skill
 
-Run only if Phase 2 showed a `stale-wrapper`. Otherwise say "No stale wrappers — skipping Phase 4" and move on.
+Run only if Phase 2 showed a `stale` skill. Otherwise say "No stale skills — skipping Phase 4" and move on.
 
 If applicable: tell me which stale skill you'll update, wait for confirmation, then run `/skills-hub update <skill>`. Same flow as Phase 3 — fetch-package, Save-skill card, verify inventory shows `current` after.
 
-FAIL if it tries to update a skill that isn't `stale-wrapper`.
+FAIL if it tries to update a skill that isn't `stale`.
 
 ## Phase 5: Update All
 
-Run only if multiple `stale-wrapper` skills remain after Phase 4. Otherwise skip.
+Run only if multiple `stale` skills remain after Phase 4. Otherwise skip.
 
 Run `/skills-hub update all`. It should list all stale targets, ask for one confirmation, then fetch-package and present a Save-skill card for each.
 
@@ -81,12 +81,14 @@ Tell me to click Save on each card. Then verify all updated skills show `current
 
 ### 6a — Run `/skills-hub install this-skill-does-not-exist`. It must error and not present a Save-skill card.
 
-### 6b — Pick a `current` skill and run `/skills-hub update <that-skill>`. It must refuse because the skill is not stale.
+### 6b — Pick a `current` skill and run `/skills-hub update <that-skill>`. It must refuse because the skill is current, not stale.
 
-### 6c — Blocked catalog (skip if network was already down in Phase 2). Ask me to temporarily disconnect from the network or block `mharbulous.github.io/skills-hub`. Then:
+### 6c — Blocked catalog (skip if network was already down in Phase 2). Ask me to temporarily disconnect from the network or block `github.com`. Then:
 - Run `/skills-hub inventory` — expect blocked-catalog response.
 - Run `/skills-hub install <any-skill>` — expect refusal.
 - Remind me to restore network access.
+
+### 6d — Modified status (optional, requires a previously installed skill with a lockfile entry). Manually edit the installed skill's SKILL.md (add a comment line). Run `/skills-hub inventory` — the skill should show `modified`. Run `/skills-hub update <that-skill>` — it should warn that local edits will be lost.
 
 Ask me for PASS/FAIL on each sub-phase.
 
@@ -111,11 +113,12 @@ After all phases, present this table filled in with results:
 | 1 | Bare command | | |
 | 2 | Inventory | | |
 | 3 | Install a skill | | |
-| 4 | Update stale wrapper | | |
+| 4 | Update stale skill | | |
 | 5 | Update all | | |
 | 6a | Install non-existent | | |
 | 6b | Update current skill | | |
 | 6c | Blocked catalog | | |
+| 6d | Modified status | | |
 | 7 | Cross-session persistence | | |
 | 8 | Installed skill works | | |
 

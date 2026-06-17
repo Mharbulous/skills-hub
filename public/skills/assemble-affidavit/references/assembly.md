@@ -158,9 +158,7 @@ If the pre-flight fails, Read the script with the **Read tool**, Write
 it to `/var/tmp/assemble.py`, re-run the pre-flight on the copy, then
 invoke the copy.
 
-Set `SKILL_DIR` to the directory containing the verified `SKILL.md` that was
-read for this skill. In Cowork, this is the directory printed by the
-Skills-hub resolver, minus the trailing `/SKILL.md`.
+Set `SKILL_DIR` to the directory containing this skill's `SKILL.md`.
 
 ## Step 5 — Handle script output
 
