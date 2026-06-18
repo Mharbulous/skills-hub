@@ -343,12 +343,21 @@ def skill_dir_install_root() -> list[Path]:
         for ancestor in plugin_level.parents:
             if ancestor.name == "skills-plugin":
                 return [ancestor]
+            if ancestor.name == ".remote-plugins":
+                claude_dir = ancestor.parent / ".claude"
+                if (claude_dir / "skills").is_dir():
+                    return [claude_dir]
+                break
         return [plugin_level]
     return []
 
 
 def default_install_roots() -> list[Path]:
     roots = skill_dir_install_root()
+    home = Path.home()
+    claude_home = home / ".claude"
+    if (claude_home / "skills").is_dir() and claude_home not in roots:
+        roots.append(claude_home)
     appdata = os.environ.get("APPDATA")
     if appdata:
         base = Path(appdata) / "Claude" / "local-agent-mode-sessions" / "skills-plugin"
@@ -476,6 +485,7 @@ def inventory_roots(args, context: dict) -> list[Path]:
 def no_install_root_message(args, context: dict) -> str:
     explicit = ", ".join(args.install_root) if args.install_root else "none supplied"
     stub = context.get("original_stub_dir") or "absent"
+    home_claude = str(Path.home() / ".claude")
     appdata = os.environ.get("APPDATA") or "absent"
     own_parent = skill_dir().parent
     own_hint = f"{own_parent} (not under a skills/ parent)" if own_parent.name != "skills" else "absent"
@@ -484,6 +494,7 @@ def no_install_root_message(args, context: dict) -> str:
         f"  --install-root: {explicit}\n"
         f"  context original_stub_dir: {stub}\n"
         f"  skill_dir parent: {own_hint}\n"
+        f"  HOME/.claude: {home_claude}\n"
         f"  APPDATA: {appdata}\n"
         "  Rerun with --install-root <dir that CONTAINS skills/> "
         "(the parent of the skills/ directory; the skills/ dir itself is auto-corrected)."

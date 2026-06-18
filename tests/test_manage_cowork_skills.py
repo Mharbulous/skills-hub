@@ -155,6 +155,7 @@ def test_inventory_no_root_error_lists_attempts(tmp_path, monkeypatch, capsys):
     manager = load_manager()
     monkeypatch.delenv("APPDATA", raising=False)
     monkeypatch.setattr(manager, "skill_dir", lambda: tmp_path / "plugins" / "skills-hub")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "nohome"))
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({"skills": [{"name": "alpha"}]}), encoding="utf-8")
 
@@ -232,6 +233,7 @@ def test_inventory_degrades_with_empty_installed_when_github_blocked_and_no_inst
     manager = load_manager()
     monkeypatch.delenv("APPDATA", raising=False)
     monkeypatch.setattr(manager, "skill_dir", lambda: tmp_path / "plugins" / "skills-hub")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "nohome"))
 
     def blocked_fetch(repo_name, ref, dest):
         raise manager.urllib.error.URLError("network blocked")
@@ -509,6 +511,44 @@ def test_skill_dir_install_root_cowork_plugin_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "skill_dir", lambda: hub_dir)
     roots = manager.skill_dir_install_root()
     assert roots == [cache_root]
+
+
+def test_skill_dir_install_root_remote_plugins(tmp_path, monkeypatch):
+    manager = load_manager()
+    mount = tmp_path / "mnt"
+    plugin_dir = mount / ".remote-plugins" / "plugin_018abc" / "skills" / "skills-hub"
+    scripts_dir = plugin_dir / "scripts"
+    scripts_dir.mkdir(parents=True)
+    user_skill = mount / ".claude" / "skills" / "vision"
+    user_skill.mkdir(parents=True)
+    (user_skill / "SKILL.md").write_text("---\nname: vision\n---\n", encoding="utf-8")
+    monkeypatch.setattr(manager, "script_dir", lambda: scripts_dir)
+    roots = manager.skill_dir_install_root()
+    assert roots == [mount / ".claude"]
+
+
+def test_skill_dir_install_root_remote_plugins_no_claude_dir(tmp_path, monkeypatch):
+    manager = load_manager()
+    mount = tmp_path / "mnt"
+    plugin_dir = mount / ".remote-plugins" / "plugin_018abc" / "skills" / "skills-hub"
+    scripts_dir = plugin_dir / "scripts"
+    scripts_dir.mkdir(parents=True)
+    monkeypatch.setattr(manager, "script_dir", lambda: scripts_dir)
+    roots = manager.skill_dir_install_root()
+    assert roots == [mount / ".remote-plugins" / "plugin_018abc"]
+
+
+def test_default_install_roots_home_fallback(tmp_path, monkeypatch):
+    manager = load_manager()
+    other_dir = tmp_path / "plugins" / "skills-hub"
+    other_dir.mkdir(parents=True)
+    monkeypatch.setattr(manager, "skill_dir", lambda: other_dir)
+    claude_home = tmp_path / "fakehome" / ".claude"
+    (claude_home / "skills").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "fakehome"))
+    monkeypatch.delenv("APPDATA", raising=False)
+    roots = manager.default_install_roots()
+    assert claude_home in roots
 
 
 # --- Lockfile tests ---
