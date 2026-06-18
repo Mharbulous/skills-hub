@@ -1,6 +1,6 @@
 {
   "name": "skills-hub",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Install and manage Skills-hub skills from the public GitHub repo in Claude Cowork.",
   "author": {
     "name": "Skills-hub"

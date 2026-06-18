@@ -92,7 +92,7 @@ ROOT_PLUGIN_DIR = ROOT / "plugins" / "skills-hub"
 MANIFEST = PUBLIC / "manifest.json"
 IGNORED_PARTS = {"overrides", "__pycache__"}
 IGNORED_SUFFIXES = {".pyc", ".pyo"}
-PLUGIN_VERSION = "0.2.0"
+PLUGIN_VERSION = "0.2.1"
 PLUGIN_DESCRIPTION = "Install and manage Skills-hub skills from the public GitHub repo in Claude Cowork."
 PLUGIN_KEYWORDS = [
     "skills-hub",
