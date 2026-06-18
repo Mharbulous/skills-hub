@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -122,23 +123,44 @@ def fetch_bytes(url: str) -> bytes:
         return resp.read()
 
 
+def fetch_github_repo_git(repo: str, ref: str, dest: Path) -> Path:
+    """Clone a GitHub repo via git (fallback when zip download is blocked)."""
+    owner, name = validate_repo(repo)
+    clone_url = f"https://github.com/{owner}/{name}.git"
+    repo_dir = dest / "repo-git"
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth=1", "--single-branch", "--branch", ref,
+             clone_url, str(repo_dir)],
+            check=True,
+            capture_output=True,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        raise RuntimeError(f"git clone failed for {repo}@{ref}: {exc}") from exc
+    return repo_dir
+
+
 def fetch_github_repo(repo: str, ref: str, dest: Path) -> Path:
     owner, name = validate_repo(repo)
     archive_url = f"https://codeload.github.com/{owner}/{name}/zip/{urllib.parse.quote(ref, safe='')}"
-    archive = dest / "repo.zip"
-    archive.write_bytes(fetch_bytes(archive_url))
-    extract_dir = dest / "repo"
-    extract_dir.mkdir()
-    with zipfile.ZipFile(archive) as zf:
-        for member in zf.infolist():
-            parts = Path(member.filename).parts
-            if not parts or any(part == ".." for part in parts):
-                fail(f"unsafe path in GitHub archive: {member.filename}")
-        zf.extractall(extract_dir)
-    roots = [path for path in extract_dir.iterdir() if path.is_dir()]
-    if len(roots) != 1:
-        fail(f"could not locate repository root in GitHub archive for {repo}@{ref}")
-    return roots[0]
+    try:
+        archive = dest / "repo.zip"
+        archive.write_bytes(fetch_bytes(archive_url))
+        extract_dir = dest / "repo"
+        extract_dir.mkdir()
+        with zipfile.ZipFile(archive) as zf:
+            for member in zf.infolist():
+                parts = Path(member.filename).parts
+                if not parts or any(part == ".." for part in parts):
+                    fail(f"unsafe path in GitHub archive: {member.filename}")
+            zf.extractall(extract_dir)
+        roots = [path for path in extract_dir.iterdir() if path.is_dir()]
+        if len(roots) != 1:
+            fail(f"could not locate repository root in GitHub archive for {repo}@{ref}")
+        return roots[0]
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+        return fetch_github_repo_git(repo, ref, dest)
 
 
 def github_skill_dirs(repo_root: Path) -> list[Path]:

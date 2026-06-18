@@ -1,9 +1,11 @@
 import importlib.util
 import json
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -787,5 +789,83 @@ def test_install_then_record_then_inventory_current(tmp_path, monkeypatch, capsy
         )
     )
 
-    rows = {row["name"]: row for row in json.loads(capsys.readouterr().out)}
-    assert rows["alpha"]["status"] == "current"
+    inv_rows = {row["name"]: row for row in json.loads(capsys.readouterr().out)}
+    assert inv_rows["alpha"]["status"] == "current"
+
+
+# --- Git fallback tests ---
+
+
+def test_fetch_github_repo_git_success(tmp_path, monkeypatch):
+    manager = load_manager()
+    repo_dir = tmp_path / "repo-git" / "public" / "skills" / "alpha"
+    repo_dir.mkdir(parents=True)
+    (repo_dir / "SKILL.md").write_text("# alpha\n", encoding="utf-8")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = manager.fetch_github_repo_git("Mharbulous/skills-hub", "main", tmp_path)
+    assert result == tmp_path / "repo-git"
+    assert (result / "public" / "skills" / "alpha" / "SKILL.md").is_file()
+
+
+def test_fetch_github_repo_git_raises_on_failure(tmp_path, monkeypatch):
+    manager = load_manager()
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.CalledProcessError(128, cmd)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="git clone failed"):
+        manager.fetch_github_repo_git("Mharbulous/skills-hub", "main", tmp_path)
+
+
+def test_fetch_github_repo_falls_back_to_git(tmp_path, monkeypatch):
+    manager = load_manager()
+    repo_dir = tmp_path / "repo-git" / "public" / "skills" / "alpha"
+    repo_dir.mkdir(parents=True)
+    (repo_dir / "SKILL.md").write_text("# alpha\n", encoding="utf-8")
+
+    import urllib.error
+
+    def fake_fetch_bytes(url):
+        raise urllib.error.URLError("blocked-by-allowlist")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(manager, "fetch_bytes", fake_fetch_bytes)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = manager.fetch_github_repo("Mharbulous/skills-hub", "main", tmp_path)
+    assert result == tmp_path / "repo-git"
+
+
+def test_fetch_github_repo_uses_zip_when_available(tmp_path, monkeypatch):
+    manager = load_manager()
+    src = tmp_path / "src"
+    skill_dir = src / "skills-hub-main" / "public" / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# alpha\n", encoding="utf-8")
+
+    zip_path = tmp_path / "test.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(skill_dir / "SKILL.md", "skills-hub-main/public/skills/alpha/SKILL.md")
+
+    dest = tmp_path / "dest"
+    dest.mkdir()
+
+    def fake_fetch_bytes(url):
+        return zip_path.read_bytes()
+
+    git_called = []
+
+    def tracking_run(cmd, **kwargs):
+        git_called.append(cmd)
+
+    monkeypatch.setattr(manager, "fetch_bytes", fake_fetch_bytes)
+    monkeypatch.setattr(subprocess, "run", tracking_run)
+    result = manager.fetch_github_repo("Mharbulous/skills-hub", "main", dest)
+    assert "skills-hub-main" in result.name
+    assert not git_called
