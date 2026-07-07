@@ -3,9 +3,9 @@ name: skills-hub
 description: >
   Manage Skills-hub skills for Cowork. Use for /skills-hub,
   /skills-hub inventory, /skills-hub install, /skills-hub update,
-  /skills-hub absorb, installing Cowork Skills-hub skills, updating stale
+  /skills-hub push, installing Cowork Skills-hub skills, updating stale
   skills, building Cowork .skill packages from the public GitHub repo,
-  and absorbing local skills into the Skills-hub repo.
+  and pushing local skills to the Skills-hub repo.
 ---
 
 # Skills-hub
@@ -26,7 +26,16 @@ folders unless the user explicitly asks for an emergency patch.
 
 ### `/skills-hub`
 
-Show help/status only:
+Run a cheap SHA freshness check, then show help:
+
+1. Run `python scripts/manage_cowork_skills.py inventory --json`. With the
+   SHA-gated catalog cache this costs a single ~1KB API call when the cache is
+   fresh — effectively free. If the command fails for any reason (network,
+   missing install root, etc.), skip to step 3.
+2. If any skill in the result array has `status == "stale"`, prepend this
+   banner before the help text: "Hub has updates for N skill(s) since your last
+   sync — run `/skills-hub inventory` to see what changed."
+3. Show the help text:
 
 ```text
 Skills-hub GitHub-backed control panel is loaded.
@@ -36,10 +45,8 @@ Commands:
 - /skills-hub update
 - /skills-hub update <skill>
 - /skills-hub update all
-- /skills-hub absorb <skill>
+- /skills-hub push <skill>
 ```
-
-Do not run inventory or fetch remote package data for the bare command.
 
 ### `/skills-hub inventory`
 
@@ -213,9 +220,9 @@ Save-skill card with `mcp__cowork__present_files`.
 After each Save + inventory confirmation, run `record-install` as described in
 the install section.
 
-### `/skills-hub absorb <skill>`
+### `/skills-hub push <skill>`
 
-Absorb a local skill into the Skills-hub repo for publishing.
+Push a local skill into the Skills-hub repo for publishing.
 
 **1. Resolve source path.** Search in order:
 
@@ -242,17 +249,17 @@ python scripts/manage_cowork_skills.py inventory --names <skill> --json
 ```
 
 If inventory returns a blocked catalog, log that remote catalog awareness was
-skipped (absorb is a local-to-repo operation) and proceed. The local directory
+skipped (push is a local-to-repo operation) and proceed. The local directory
 check above is the authoritative conflict guard.
 
 **3. Determine license.** Check the source directory for a `LICENSE` or
 `LICENSE.md` file. If found, use its SPDX identifier. If not found, default
 to `MIT`.
 
-**4. Run absorb.**
+**4. Run push.**
 
 ```bash
-python scripts/manage_cowork_skills.py absorb --source <absolute-path> --name <skill> --license <license>
+python scripts/manage_cowork_skills.py push --source <absolute-path> --name <skill> --license <license>
 ```
 
 On failure, report the exact error and stop. On success, show the destination
@@ -261,7 +268,7 @@ path (`public/skills/<skill>`).
 **5. Offer GitHub PR.** Ask the user whether to create a PR:
 
 ```bash
-python scripts/manage_cowork_skills.py absorb --source <absolute-path> --name <skill> --license <license> --github-pr
+python scripts/manage_cowork_skills.py push --source <absolute-path> --name <skill> --license <license> --github-pr
 ```
 
 `GITHUB_TOKEN` is required with `contents:write` and `pull-requests:write`

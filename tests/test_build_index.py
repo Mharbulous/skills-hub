@@ -208,8 +208,8 @@ def test_skills_hub_skill_advertises_control_panel_verbs():
     assert "- /skills-hub update\n" in text
     assert "/skills-hub update <skill>" in text
     assert "/skills-hub update all" in text
-    assert "/skills-hub absorb <skill>" in text
-    assert "absorb" in frontmatter.lower()
+    assert "/skills-hub push <skill>" in text
+    assert "push" in frontmatter.lower()
     assert "assimilate" not in frontmatter.lower()
     assert "assimilate" not in text.lower()
 

@@ -29,6 +29,9 @@ EXCLUDED_DIRS = {".git", ".hg", ".svn", "__pycache__", ".pytest_cache", ".mypy_c
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".skill"}
 EXCLUDED_NAMES = {"manifest.json", "manifest.json.sig"}
 
+_PREAMBLE_START = "<!-- skills-hub-freshness-check: start -->"
+_PREAMBLE_END = "<!-- skills-hub-freshness-check: end -->"
+
 
 class CatalogUnavailable(RuntimeError):
     pass
@@ -123,6 +126,27 @@ def fetch_bytes(url: str) -> bytes:
         return resp.read()
 
 
+def github_head_sha(repo: str, ref: str) -> str | None:
+    """Return the HEAD commit SHA for repo@ref via the GitHub API, or None on any failure."""
+    owner, name = validate_repo(repo)
+    url = (
+        f"https://api.github.com/repos/{owner}/{name}/commits/"
+        f"{urllib.parse.quote(ref, safe='')}"
+    )
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "skills-hub-manager/1",
+            "Accept": "application/vnd.github+json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())["sha"]
+    except Exception:
+        return None
+
+
 def fetch_github_repo_git(repo: str, ref: str, dest: Path) -> Path:
     """Clone a GitHub repo via git (fallback when zip download is blocked)."""
     owner, name = validate_repo(repo)
@@ -178,6 +202,15 @@ def strip_frontmatter(text: str) -> str:
     return text
 
 
+def _strip_preamble(text: str) -> str:
+    """Remove an injected freshness-check preamble block from SKILL.md text, if present."""
+    start = text.find(_PREAMBLE_START)
+    end = text.find(_PREAMBLE_END)
+    if start == -1 or end == -1:
+        return text
+    return text[:start] + text[end + len(_PREAMBLE_END):].lstrip("\n")
+
+
 def direct_package_files(skill_source: Path) -> list[Path]:
     files: list[Path] = []
     for path in sorted(skill_source.rglob("*")):
@@ -194,12 +227,47 @@ def direct_package_files(skill_source: Path) -> list[Path]:
 
 def merged_cowork_skill_text(skill_source: Path) -> str:
     text = (skill_source / "SKILL.md").read_text(encoding="utf-8")
+    # Strip any injected preamble so content_hash is preamble-independent.
+    text = _strip_preamble(text)
     override = skill_source / "overrides" / "cowork.md"
     if override.is_file():
         body = strip_frontmatter(override.read_text(encoding="utf-8")).strip()
         if body:
             text = text.rstrip() + "\n\n" + body + "\n"
     return text
+
+
+def _inject_preamble(text: str, skill_name: str) -> str:
+    """Prepend a freshness-check preamble into skill text, inserted after frontmatter."""
+    preamble = (
+        _PREAMBLE_START + "\n\n"
+        "## Freshness check\n\n"
+        f"Before executing this skill, check whether `{skill_name}` has updates:\n\n"
+        "1. The skills-hub management script is at:\n"
+        f"   `<this SKILL.md's directory>/../skills-hub/scripts/manage_cowork_skills.py`\n"
+        "   If that file does not exist, skip this check and proceed silently.\n"
+        f"2. Run: `python \"<path>\" inventory --names {skill_name} --json`\n"
+        "3. Branch on the result status:\n"
+        "   - `current`: proceed silently.\n"
+        f"   - `stale`: tell the user — \"This skill has updates available. Run\n"
+        f"     `/skills-hub update {skill_name}` to get the latest version, or\n"
+        "     continue with the installed version.\" Wait for their choice.\n"
+        f"   - `modified`: tell the user — \"This skill has local modifications.\n"
+        f"     Run `/skills-hub push {skill_name}` to contribute your changes\n"
+        "     upstream.\" Then proceed.\n"
+        f"   - `diverged`: tell the user — \"This skill has both local edits and\n"
+        f"     hub updates. Run `/skills-hub update {skill_name}` to review\n"
+        "     options.\" Wait for their choice.\n"
+        "   - Any error or non-zero exit: proceed silently.\n\n"
+        + _PREAMBLE_END + "\n\n"
+    )
+    if text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end != -1:
+            header = text[:end + 4]
+            body = text[end + 4:].lstrip("\n")
+            return header + "\n\n" + preamble + body
+    return preamble + text
 
 
 def content_hash(skill_dir_path: Path) -> str:
@@ -270,12 +338,19 @@ def merge_lockfiles(install_roots: list[Path]) -> dict:
 CATALOG_CACHE_NAME = "skills-hub-catalog-cache.json"
 
 
-def cache_catalog(install_root: Path, catalog: dict) -> None:
+def cache_catalog(install_root: Path, catalog: dict, ref_sha: str | None = None) -> None:
     path = install_root / CATALOG_CACHE_NAME
     tmp = path.with_suffix(".tmp")
     try:
         tmp.write_text(
-            json.dumps({"cached_at": datetime.now(timezone.utc).isoformat(), "catalog": catalog}, indent=2) + "\n",
+            json.dumps(
+                {
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                    "ref_sha": ref_sha,
+                    "catalog": catalog,
+                },
+                indent=2,
+            ) + "\n",
             encoding="utf-8",
         )
         os.replace(tmp, path)
@@ -283,8 +358,8 @@ def cache_catalog(install_root: Path, catalog: dict) -> None:
         pass
 
 
-def read_cached_catalog(install_roots: list[Path]) -> tuple[dict, str] | None:
-    best: tuple[dict, str] | None = None
+def read_cached_catalog(install_roots: list[Path]) -> tuple[dict, str, str | None] | None:
+    best: tuple[dict, str, str | None] | None = None
     for root in install_roots:
         path = root / CATALOG_CACHE_NAME
         if not path.is_file():
@@ -292,15 +367,18 @@ def read_cached_catalog(install_roots: list[Path]) -> tuple[dict, str] | None:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             cached_at = data.get("cached_at", "")
+            ref_sha = data.get("ref_sha")
             catalog = data.get("catalog")
             if isinstance(catalog, dict) and (best is None or cached_at > best[1]):
-                best = (catalog, cached_at)
+                best = (catalog, cached_at, ref_sha)
         except (json.JSONDecodeError, OSError):
             continue
     return best
 
 
-def write_direct_skill_package(repo_root: Path, skill: str, output_dir: Path, repo: str, ref: str, as_json: bool) -> FetchResult:
+def write_direct_skill_package(
+    repo_root: Path, skill: str, output_dir: Path, repo: str, ref: str, as_json: bool, sha: str | None = None
+) -> FetchResult:
     skill_source = repo_root / "public" / "skills" / skill
     if not (skill_source / "SKILL.md").is_file():
         emit_structured_error(skill, "skill not found in GitHub repo", as_json)
@@ -314,11 +392,15 @@ def write_direct_skill_package(repo_root: Path, skill: str, output_dir: Path, re
             for rel in direct_package_files(skill_source):
                 archive_name = f"{skill}/{rel.as_posix()}"
                 if rel.as_posix() == "SKILL.md":
-                    zf.writestr(archive_name, merged_cowork_skill_text(skill_source))
+                    skill_text = merged_cowork_skill_text(skill_source)
+                    if skill != "skills-hub":
+                        skill_text = _inject_preamble(skill_text, skill)
+                    zf.writestr(archive_name, skill_text)
                 else:
                     zf.write(skill_source / rel, archive_name)
     except OSError as exc:
         emit_structured_error(skill, f"output directory not writable: {output_dir}; pass --output-dir <writable dir> ({exc})", as_json)
+    source_ref = f"{repo}@{sha}" if sha else f"{repo}@{ref}"
     return FetchResult(
         skill=skill,
         package_path=str(package),
@@ -326,7 +408,7 @@ def write_direct_skill_package(repo_root: Path, skill: str, output_dir: Path, re
         sha256=sha256_file(package),
         size=package.stat().st_size,
         content_hash=content_hash(skill_source),
-        source_ref=f"{repo}@{ref}",
+        source_ref=source_ref,
     )
 
 
@@ -584,25 +666,33 @@ def cmd_inventory(args) -> None:
     ref = getattr(args, "ref", DEFAULT_GITHUB_REF)
     names_filter = parse_names_filter(args)
     use_github_catalog = not args.index and not args.manifest
+    roots = inventory_roots(args, context)
+    sha = None
+    catalog_from_cache = False
     try:
         if use_github_catalog:
-            try:
-                with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
-                    repo_root = fetch_github_repo(repo, ref, Path(tmp))
-                    catalog = github_catalog(repo_root)
-            except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
-                catalog_unavailable(f"could not download GitHub repo {repo}@{ref}: {exc}")
+            sha = github_head_sha(repo, ref)
+            cached_result = read_cached_catalog(roots) if roots else None
+            if sha is not None and cached_result is not None and cached_result[2] == sha:
+                catalog = cached_result[0]
+                catalog_from_cache = True
+            else:
+                try:
+                    with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
+                        repo_root = fetch_github_repo(repo, ref, Path(tmp))
+                        catalog = github_catalog(repo_root)
+                except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
+                    catalog_unavailable(f"could not download GitHub repo {repo}@{ref}: {exc}")
         else:
             catalog = load_catalog(
                 index_path=args.index,
                 manifest_path=args.manifest,
             )
     except CatalogUnavailable as exc:
-        roots = inventory_roots(args, context)
         if roots:
             cached = read_cached_catalog(roots)
             if cached:
-                catalog, cached_at = cached
+                catalog, cached_at, _ = cached
                 installed = discover_installed(roots)
                 rows = build_inventory(catalog, installed, roots)
                 for row in rows:
@@ -617,14 +707,13 @@ def cmd_inventory(args) -> None:
             local_rows = [r for r in local_rows if r.name in names_filter]
         print_degraded_inventory(str(exc), local_rows, args.json)
         return
-    roots = inventory_roots(args, context)
     if not roots:
         fail(no_install_root_message(args, context))
     installed = discover_installed(roots)
     if not installed:
         warn_empty_install_roots(roots)
-    if use_github_catalog:
-        cache_catalog(roots[0], catalog)
+    if use_github_catalog and not catalog_from_cache and roots:
+        cache_catalog(roots[0], catalog, ref_sha=sha)
     rows = build_inventory(catalog, installed, roots)
     if names_filter:
         rows = [r for r in rows if r.name in names_filter]
@@ -635,10 +724,11 @@ def cmd_fetch_package(args) -> None:
     repo = getattr(args, "repo", DEFAULT_GITHUB_REPO)
     ref = getattr(args, "ref", DEFAULT_GITHUB_REF)
     output_dir = args.output_dir
+    sha = github_head_sha(repo, ref)
     try:
         with tempfile.TemporaryDirectory(prefix="skills-hub-github-") as tmp:
             repo_root = fetch_github_repo(repo, ref, Path(tmp))
-            result = write_direct_skill_package(repo_root, args.skill, output_dir, repo, ref, args.json)
+            result = write_direct_skill_package(repo_root, args.skill, output_dir, repo, ref, args.json, sha=sha)
     except (urllib.error.HTTPError, urllib.error.URLError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
         emit_structured_error(args.skill, f"could not download GitHub repo {repo}@{ref}: {exc}", args.json)
     if args.json:
@@ -683,7 +773,7 @@ def provenance_text(source: Path, license_value: str) -> str:
             "",
             f"- Source: `{source}`",
             f"- License: {license_value}",
-            f"- Absorbed: {datetime.now(timezone.utc).isoformat()}",
+            f"- Pushed: {datetime.now(timezone.utc).isoformat()}",
             "",
         ]
     )
@@ -736,14 +826,14 @@ def github_request(method: str, path: str, token: str, data: dict | None = None,
     return status, json.loads(response_body.decode("utf-8"))
 
 
-def cmd_absorb_github_pr(args, source: Path, name: str) -> None:
+def cmd_push_github_pr(args, source: Path, name: str) -> None:
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         fail("GITHUB_TOKEN is required for --github-pr with contents:write and pull-requests:write access")
     owner, repo = validate_repo(args.repo)
     repo_path = f"/repos/{owner}/{repo}"
     target_path = f"public/skills/{name}"
-    branch = f"skills-hub/absorb-{name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    branch = f"skills-hub/push-{name}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
     github_request("GET", repo_path, token)
     status, _ = github_request(
@@ -779,7 +869,7 @@ def cmd_absorb_github_pr(args, source: Path, name: str) -> None:
         f"{repo_path}/pulls",
         token,
         {
-            "title": f"Absorb {name}",
+            "title": f"Push {name}",
             "head": branch,
             "base": args.base,
             "body": f"Adds `{name}` to Skills-hub.\n\nSource: `{source}`\nLicense: {args.license}\n",
@@ -789,7 +879,7 @@ def cmd_absorb_github_pr(args, source: Path, name: str) -> None:
     print(pr.get("html_url", ""))
 
 
-def cmd_absorb(args) -> None:
+def cmd_push(args) -> None:
     source = args.source.resolve()
     if not source.is_dir():
         fail(f"source skill directory not found: {source}")
@@ -797,7 +887,7 @@ def cmd_absorb(args) -> None:
     if not (source / "SKILL.md").is_file():
         fail(f"source has no SKILL.md: {source}")
     if getattr(args, "github_pr", False):
-        cmd_absorb_github_pr(args, source, name)
+        cmd_push_github_pr(args, source, name)
         return
 
     repo_root = find_repo_root()
@@ -861,14 +951,14 @@ def main() -> None:
     rec.add_argument("--install-root", action="append", default=[])
     rec.set_defaults(func=cmd_record_install)
 
-    absorb = sub.add_parser("absorb")
-    absorb.add_argument("--source", type=Path, required=True)
-    absorb.add_argument("--name")
-    absorb.add_argument("--license", default="unknown")
-    absorb.add_argument("--github-pr", action="store_true")
-    absorb.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
-    absorb.add_argument("--base", default="main")
-    absorb.set_defaults(func=cmd_absorb)
+    push = sub.add_parser("push")
+    push.add_argument("--source", type=Path, required=True)
+    push.add_argument("--name")
+    push.add_argument("--license", default="unknown")
+    push.add_argument("--github-pr", action="store_true")
+    push.add_argument("--repo", default=DEFAULT_GITHUB_REPO)
+    push.add_argument("--base", default="main")
+    push.set_defaults(func=cmd_push)
 
     args = parser.parse_args()
     args.func(args)

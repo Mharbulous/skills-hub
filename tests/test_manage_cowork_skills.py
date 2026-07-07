@@ -328,7 +328,7 @@ def test_direct_install_then_inventory_shows_current(tmp_path, monkeypatch, caps
     assert rows["alpha"]["status"] == "current"
 
 
-def test_absorb_writes_source_and_provenance(tmp_path, monkeypatch):
+def test_push_writes_source_and_provenance(tmp_path, monkeypatch):
     manager = load_manager()
     repo = tmp_path / "repo"
     (repo / "public" / "skills").mkdir(parents=True)
@@ -341,7 +341,7 @@ def test_absorb_writes_source_and_provenance(tmp_path, monkeypatch):
     (source / "__pycache__" / "x.pyc").write_bytes(b"cache")
     monkeypatch.chdir(repo)
 
-    manager.cmd_absorb(SimpleNamespace(source=source, name="imported-skill", license="internal", github_pr=False))
+    manager.cmd_push(SimpleNamespace(source=source, name="imported-skill", license="internal", github_pr=False))
 
     dest = repo / "public" / "skills" / "imported-skill"
     assert (dest / "SKILL.md").is_file()
@@ -349,7 +349,7 @@ def test_absorb_writes_source_and_provenance(tmp_path, monkeypatch):
     assert not (dest / "__pycache__").exists()
 
 
-def test_absorb_blocks_name_conflict(tmp_path, monkeypatch):
+def test_push_blocks_name_conflict(tmp_path, monkeypatch):
     manager = load_manager()
     repo = tmp_path / "repo"
     (repo / "public" / "skills" / "existing").mkdir(parents=True)
@@ -361,10 +361,10 @@ def test_absorb_blocks_name_conflict(tmp_path, monkeypatch):
     monkeypatch.chdir(repo)
 
     with pytest.raises(SystemExit):
-        manager.cmd_absorb(SimpleNamespace(source=source, name="existing", license="unknown", github_pr=False))
+        manager.cmd_push(SimpleNamespace(source=source, name="existing", license="unknown", github_pr=False))
 
 
-def test_absorb_github_pr_uploads_selected_files(tmp_path, monkeypatch, capsys):
+def test_push_github_pr_uploads_selected_files(tmp_path, monkeypatch, capsys):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -394,7 +394,7 @@ def test_absorb_github_pr_uploads_selected_files(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(manager, "github_request", fake_github_request)
 
-    manager.cmd_absorb(
+    manager.cmd_push(
         SimpleNamespace(
             source=source,
             name="imported-skill",
@@ -412,7 +412,7 @@ def test_absorb_github_pr_uploads_selected_files(tmp_path, monkeypatch, capsys):
     assert not any(".secret" in path or "__pycache__" in path or path.endswith(".skill") for path in uploaded_paths)
 
 
-def test_absorb_github_pr_requires_token(tmp_path, monkeypatch):
+def test_push_github_pr_requires_token(tmp_path, monkeypatch):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -420,7 +420,7 @@ def test_absorb_github_pr_requires_token(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
 
     with pytest.raises(SystemExit):
-        manager.cmd_absorb(
+        manager.cmd_push(
             SimpleNamespace(
                 source=source,
                 name="imported-skill",
@@ -432,7 +432,7 @@ def test_absorb_github_pr_requires_token(tmp_path, monkeypatch):
         )
 
 
-def test_absorb_github_pr_blocks_existing_target(tmp_path, monkeypatch):
+def test_push_github_pr_blocks_existing_target(tmp_path, monkeypatch):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -449,7 +449,7 @@ def test_absorb_github_pr_blocks_existing_target(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "github_request", fake_github_request)
 
     with pytest.raises(SystemExit):
-        manager.cmd_absorb(
+        manager.cmd_push(
             SimpleNamespace(
                 source=source,
                 name="imported-skill",
@@ -461,7 +461,7 @@ def test_absorb_github_pr_blocks_existing_target(tmp_path, monkeypatch):
         )
 
 
-def test_absorb_github_pr_surfaces_api_failure(tmp_path, monkeypatch):
+def test_push_github_pr_surfaces_api_failure(tmp_path, monkeypatch):
     manager = load_manager()
     source = tmp_path / "source-skill"
     source.mkdir()
@@ -474,7 +474,7 @@ def test_absorb_github_pr_surfaces_api_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, "github_request", fake_github_request)
 
     with pytest.raises(SystemExit):
-        manager.cmd_absorb(
+        manager.cmd_push(
             SimpleNamespace(
                 source=source,
                 name="imported-skill",
@@ -705,6 +705,9 @@ def test_cached_catalog_enables_offline_staleness(tmp_path, monkeypatch, capsys)
         raise manager.urllib.error.URLError("network blocked")
 
     monkeypatch.setattr(manager, "fetch_github_repo", blocked_fetch)
+    # Also block the SHA check so the fast path doesn't short-circuit to the cache
+    # without going through the CatalogUnavailable offline-fallback path.
+    monkeypatch.setattr(manager, "github_head_sha", lambda r, ref: None)
 
     manager.cmd_inventory(
         SimpleNamespace(
@@ -732,6 +735,8 @@ def test_fetch_package_includes_content_hash_and_source_ref(tmp_path, monkeypatc
     repo = tmp_path / "repo"
     make_repo_skill(repo, "alpha", body="Test content\n")
     monkeypatch.setattr(manager, "fetch_github_repo", lambda repo_name, ref, dest: repo)
+    # Block SHA lookup so source_ref falls back to repo@ref format.
+    monkeypatch.setattr(manager, "github_head_sha", lambda r, ref: None)
 
     manager.cmd_fetch_package(
         SimpleNamespace(
@@ -869,3 +874,217 @@ def test_fetch_github_repo_uses_zip_when_available(tmp_path, monkeypatch):
     result = manager.fetch_github_repo("Mharbulous/skills-hub", "main", dest)
     assert "skills-hub-main" in result.name
     assert not git_called
+
+
+# --- github_head_sha tests ---
+
+
+def test_github_head_sha_returns_none_on_network_failure(monkeypatch):
+    manager = load_manager()
+
+    import urllib.error
+
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.URLError("blocked")
+
+    monkeypatch.setattr(manager.urllib.request, "urlopen", fake_urlopen)
+    result = manager.github_head_sha("Mharbulous/skills-hub", "main")
+    assert result is None
+
+
+def test_github_head_sha_returns_none_on_bad_json(monkeypatch):
+    manager = load_manager()
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+        def read(self):
+            return b"not-json-{"
+
+    monkeypatch.setattr(manager.urllib.request, "urlopen", lambda req, timeout=None: FakeResp())
+    result = manager.github_head_sha("Mharbulous/skills-hub", "main")
+    assert result is None
+
+
+# --- SHA catalog cache fast-path tests ---
+
+
+def test_sha_fast_path_skips_archive_download(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    install_root = tmp_path / "install"
+    install_root.mkdir()
+
+    test_sha = "abc123def456"
+    catalog = {"skills": [{"name": "alpha", "content_hash": "hash1"}]}
+    manager.cache_catalog(install_root, catalog, ref_sha=test_sha)
+
+    fetch_called = []
+
+    def fake_fetch(repo_name, ref, dest):
+        fetch_called.append(True)
+        raise AssertionError("fetch_github_repo should not be called when SHA matches cache")
+
+    monkeypatch.setattr(manager, "fetch_github_repo", fake_fetch)
+    monkeypatch.setattr(manager, "github_head_sha", lambda r, ref: test_sha)
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(install_root)],
+            index=None,
+            manifest=None,
+            repo="Mharbulous/skills-hub",
+            ref="main",
+            json=True,
+            names=None,
+        )
+    )
+
+    assert not fetch_called
+    rows = json.loads(capsys.readouterr().out)
+    assert any(r["name"] == "alpha" for r in rows)
+
+
+def test_sha_mismatch_triggers_archive_download(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    install_root = tmp_path / "install"
+    install_root.mkdir()
+    repo = tmp_path / "repo"
+    make_repo_skill(repo, "alpha")
+
+    old_sha = "old-sha"
+    new_sha = "new-sha"
+    old_catalog = {"skills": [{"name": "alpha", "content_hash": "old-hash"}]}
+    manager.cache_catalog(install_root, old_catalog, ref_sha=old_sha)
+
+    fetch_called = []
+
+    def fake_fetch(repo_name, ref, dest):
+        fetch_called.append(True)
+        return repo
+
+    monkeypatch.setattr(manager, "fetch_github_repo", fake_fetch)
+    monkeypatch.setattr(manager, "github_head_sha", lambda r, ref: new_sha)
+
+    manager.cmd_inventory(
+        SimpleNamespace(
+            install_root=[str(install_root)],
+            index=None,
+            manifest=None,
+            repo="Mharbulous/skills-hub",
+            ref="main",
+            json=True,
+            names=None,
+        )
+    )
+
+    assert fetch_called, "fetch_github_repo should be called when SHA changed"
+
+
+def test_cache_stores_ref_sha(tmp_path):
+    manager = load_manager()
+    catalog = {"skills": [{"name": "alpha", "content_hash": "h1"}]}
+    manager.cache_catalog(tmp_path, catalog, ref_sha="abc123")
+    result = manager.read_cached_catalog([tmp_path])
+    assert result is not None
+    retrieved_catalog, cached_at, ref_sha = result
+    assert ref_sha == "abc123"
+    assert retrieved_catalog == catalog
+
+
+def test_cache_ref_sha_none_when_not_stored(tmp_path):
+    manager = load_manager()
+    catalog = {"skills": [{"name": "alpha", "content_hash": "h1"}]}
+    manager.cache_catalog(tmp_path, catalog, ref_sha=None)
+    result = manager.read_cached_catalog([tmp_path])
+    assert result is not None
+    _, _, ref_sha = result
+    assert ref_sha is None
+
+
+def test_fetch_package_source_ref_uses_sha_when_available(tmp_path, monkeypatch, capsys):
+    manager = load_manager()
+    repo = tmp_path / "repo"
+    make_repo_skill(repo, "alpha", body="Test content\n")
+    monkeypatch.setattr(manager, "fetch_github_repo", lambda repo_name, ref, dest: repo)
+    monkeypatch.setattr(manager, "github_head_sha", lambda r, ref: "abc123def456")
+
+    manager.cmd_fetch_package(
+        SimpleNamespace(
+            skill="alpha",
+            repo="Mharbulous/skills-hub",
+            ref="main",
+            output_dir=tmp_path / "out",
+            json=True,
+        )
+    )
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["source_ref"] == "Mharbulous/skills-hub@abc123def456"
+
+
+# --- Preamble injection tests ---
+
+
+def test_preamble_injected_for_non_skills_hub(tmp_path):
+    manager = load_manager()
+    repo = tmp_path / "repo"
+    make_repo_skill(repo, "vision", body="Vision body\n")
+
+    result = manager.write_direct_skill_package(
+        repo, "vision", tmp_path / "out", "Mharbulous/skills-hub", "main", True, sha=None
+    )
+
+    with zipfile.ZipFile(result.package_path) as zf:
+        skill_md = zf.read("vision/SKILL.md").decode("utf-8")
+
+    assert manager._PREAMBLE_START in skill_md
+    assert "Freshness check" in skill_md
+    assert "Vision body" in skill_md
+
+
+def test_preamble_not_injected_for_skills_hub(tmp_path):
+    manager = load_manager()
+    skill_source = tmp_path / "public" / "skills" / "skills-hub"
+    skill_source.mkdir(parents=True)
+    (skill_source / "SKILL.md").write_text(
+        "---\nname: skills-hub\ndescription: Hub\n---\n\nHub body\n",
+        encoding="utf-8",
+    )
+
+    result = manager.write_direct_skill_package(
+        tmp_path, "skills-hub", tmp_path / "out", "Mharbulous/skills-hub", "main", True, sha=None
+    )
+
+    with zipfile.ZipFile(result.package_path) as zf:
+        skill_md = zf.read("skills-hub/SKILL.md").decode("utf-8")
+
+    assert manager._PREAMBLE_START not in skill_md
+
+
+def test_content_hash_unaffected_by_preamble(tmp_path):
+    manager = load_manager()
+    repo = tmp_path / "repo"
+    skill_source = make_repo_skill(repo, "vision", body="Vision body\n")
+
+    source_hash = manager.content_hash(skill_source)
+
+    result = manager.write_direct_skill_package(
+        repo, "vision", tmp_path / "out", "Mharbulous/skills-hub", "main", False, sha=None
+    )
+
+    install_skills = tmp_path / "installed" / "skills"
+    with zipfile.ZipFile(result.package_path) as zf:
+        zf.extractall(install_skills)
+
+    install_dir = install_skills / "vision"
+    installed_skill_md = (install_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert manager._PREAMBLE_START in installed_skill_md, "installed SKILL.md should contain preamble"
+
+    installed_hash = manager.content_hash(install_dir)
+    assert installed_hash == source_hash, (
+        "content_hash should be equal whether computed from source or installed skill"
+    )
