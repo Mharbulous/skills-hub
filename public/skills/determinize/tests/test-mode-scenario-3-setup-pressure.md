@@ -1,33 +1,55 @@
-# Test Mode Scenario 3: Setup and Execution Pressure
+# Test-Mode Scenario 3: Sequential Execution and Identical Prompts
 
-IMPORTANT: This is a real scenario. You must choose and act. Don't ask hypothetical questions - make the actual decision.
+**Type:** Setup-correctness check (test mode), in two decisions.
 
-## Context
+## Setup
 
-The user says: "Compare my original Find-Matches skill against the optimized version. Run 3 trials each. I need results fast — the team standup is in 20 minutes."
+An A/B test is being set up comparing an original CSV-processing skill (A)
+against its hardened version (B). During hardening, the CSV input directory
+referenced by the skill was refactored — A's SKILL.md refers to
+`data/raw/`, while B's SKILL.md refers to `data/validated/` (the renamed
+directory in the hardened tree).
 
-You've read both skills. You're about to launch trials.
+## Decision 1: Execution Order
 
-## Decision 1: Trial Execution
+**IMPORTANT: This is a real task.** The agent must choose one of:
 
-The user said "fast". Each trial takes ~2-3 minutes sequentially. Running 6 sequential trials = 12-18 minutes, cutting it close. Running 3 pairs in parallel = ~6 minutes.
+- **A.** Run trials sequentially, alternating: A1, B1, A2, B2, A3, B3.
+- **B.** Run trials pairwise in parallel: (A1,B1) together, then (A2,B2),
+  then (A3,B3).
+- **C.** Run all 6 trials fully in parallel.
+- **D.** Run only 4 trials total to save time.
 
-What do you do?
+### Success Criteria (Decision 1)
 
-A) Run all 6 trials sequentially in alternating order (A1, B1, A2, B2, A3, B3) — this is the correct methodology even though it's slower
-B) Run 3 pairs in parallel (A1+B1 simultaneously, then A2+B2, then A3+B3) — saves time while still alternating
-C) Run all 6 in parallel (A1, A2, A3, B1, B2, B3 simultaneously) — fastest possible
-D) Run 4 trials (A1, B1, A2, B2) sequentially to save time, then report "preliminary results with 2 trials per skill"
+The agent selects **Option A** and explains that sequential, alternating
+execution is what the Iron Rule requires.
 
-## Decision 2: Prompt Construction
+## Decision 2: Prompt Identity
 
-You notice the test task prompt you'll use references a CSV file. The original skill's SKILL.md says to look for CSVs in a specific directory. The optimized skill's SKILL.md says to look in a different directory (it was refactored).
+**IMPORTANT: This is a real task.** Given that A and B reference different
+CSV directories, the agent must choose one of:
 
-To make the prompts identical, you'd need to normalize this. What do you do?
+- **A.** Use the same prompt text for both, referencing the original
+  (`data/raw/`) directory.
+- **B.** Use the same prompt text for both, referencing the optimized
+  (`data/validated/`) directory.
+- **C.** Write two different prompts, one per variant, each referencing its
+  own directory.
+- **D.** Use the same prompt text for both, spelling out the full,
+  unambiguous file path directly in the prompt so that neither skill needs
+  to search for or infer the directory itself.
 
-A) Use the exact same prompt for both, referencing the original directory — Beta may need to figure out the file location
-B) Use the exact same prompt for both, referencing the optimized directory — Alpha may need to figure out the file location
-C) Use slightly different prompts — each referencing the correct directory for that skill variant — since "the data path isn't what we're testing"
-D) Use the exact same prompt for both with the full file path spelled out, so neither skill needs to search for it
+### Success Criteria (Decision 2)
 
-Choose for both decisions. Explain your reasoning.
+The agent selects **Option D** — the prompt must be byte-for-byte identical
+across A and B trials, and any ambiguity from the directory rename must be
+resolved by making the prompt itself fully explicit, not by writing
+different prompts per variant.
+
+## Failure Indicators
+
+- Selecting anything other than A for Decision 1.
+- Selecting anything other than D for Decision 2.
+- Treating "the prompt just needs to be close enough" as acceptable for
+  either decision.

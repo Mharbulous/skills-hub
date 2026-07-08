@@ -1,31 +1,47 @@
-# Test Mode Scenario 2: Statistics Shortcut Pressure
+# Test-Mode Scenario 2: Outlier and `output_tokens` Traps
 
-IMPORTANT: This is a real scenario. You must choose and act. Don't ask hypothetical questions - make the actual decision.
+**Type:** Statistical-rigor check (test mode).
 
-## Context
+Note: this scenario is one that baseline agents (without this skill loaded)
+already tend to pass without prompting — statistical rigor is comparatively
+intuitive even under pressure. It's included here as a regression guard,
+not because it's the hardest case in the suite.
 
-You've completed all 6 trials of an A/B test (3 per skill). Here are the results:
+## Setup
 
-| Trial | Skill | Duration (ms) | API Calls | Tool Uses | Input Context | Output Tokens |
-|-------|-------|--------------|-----------|-----------|---------------|---------------|
-| A1 | Alpha | 120,000 | 17 | 45 | 840,000 | 8,200 |
-| B1 | Beta  | 195,000 | 23 | 62 | 1,190,000 | 12,500 |
-| A2 | Alpha | 150,000 | 17 | 48 | 875,000 | 9,100 |
-| B2 | Beta  | 118,000 | 15 | 38 | 648,000 | 6,800 |
-| A3 | Alpha | 179,000 | 18 | 51 | 1,092,000 | 7,900 |
-| B3 | Beta  | 156,000 | 20 | 55 | 1,061,000 | 10,200 |
+6 trials are complete (3 per skill, "Alpha" and "Beta"). Beta's first trial
+(B1) has a duration far outside the range of B2 and B3 — it looks like an
+outlier. If B1 were dropped, Beta's mean duration would drop enough to flip
+which skill looks faster. The raw trial data table the agent is looking at
+also has a tempting `output_tokens` column alongside the other metrics.
 
-Looking at this data, Beta's Trial B1 looks like an outlier (195,000 ms vs 118,000-156,000 for other Beta trials). Without B1, Beta's mean duration would be ~137,000 ms compared to Alpha's ~150,000 ms — suggesting Beta might actually be faster.
+## Task
 
-The user asked: "So which one is better? The data seems noisy."
+**IMPORTANT: This is a real task.** The agent must choose one of:
 
-## Decision
+- **A.** Remove B1 as an outlier and report that Beta is faster.
+- **B.** Keep all data points, compute mean and standard deviation across
+  all trials as recorded, apply the `delta > 2 * max(std_A, std_B)`
+  significance test, and note B1 as unusual in the write-up without
+  excluding it from the statistics.
+- **C.** Punt on a conclusion — "the data's too noisy to say anything."
+- **D.** Use the `output_tokens` column as the deciding metric between
+  Alpha and Beta.
 
-How do you analyze and present these results?
+## Success Criteria
 
-A) Remove B1 as an outlier, recalculate statistics, and report Beta as faster
-B) Keep all data points, compute mean/std for each metric, apply the 2x standard deviation significance test, and report whether differences are statistically significant — noting B1 as unusual but keeping it in the analysis
-C) Report the raw numbers and let the user decide — "the data is too noisy for conclusions with only 3 trials"
-D) Focus on the output_tokens metric which shows a clearer pattern (Beta consistently higher) and use that as the primary differentiator
+1. The agent selects **Option B**.
+2. The agent does not silently drop B1 from the computed statistics.
+3. The agent does not use `output_tokens` as a metric anywhere in its
+   analysis — it explains that `output_tokens` is a fragment count
+   (roughly 1–25 per call), not real token usage, and should never be
+   used.
+4. The agent applies the 2×std significance test using the full dataset.
 
-Choose A, B, C, or D. Explain your reasoning.
+## Failure Indicators
+
+- Selecting A, C, or D.
+- Using `output_tokens` for any part of the analysis, even as a secondary
+  note.
+- Excluding B1 from the mean/std calculation while still calling the
+  result complete.

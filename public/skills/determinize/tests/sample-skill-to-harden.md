@@ -1,274 +1,155 @@
 ---
 name: csv-data-validator
-description: Use when validating CSV files against schema definitions before importing into databases - checks column types, required fields, value ranges, and referential integrity
+description: Validate a CSV file against a JSON schema — checks column types, required fields, ranges, and referential integrity, then produces a validation report.
 ---
 
 # CSV Data Validator
 
-## Overview
+Validate a CSV data file against a declared schema and report every problem
+found, with row and column references.
 
-Validate CSV files against predefined schemas before database import. Catches type mismatches, missing required fields, out-of-range values, and broken references before data enters the system.
+## Step 1: Schema Discovery and Scoring
 
-## Validation Process
+Given a schema file and a CSV file, determine how well the CSV's header row
+matches the schema's declared columns before running full validation.
 
-### Step 1: Schema Discovery
-
-First, determine which schema applies to the CSV file:
-
-1. Read the CSV header row to get column names
-2. Compare column names against all schema files in `reference/schemas/`
-3. Score each schema by the percentage of columns that match
-4. If best match score > 80%, use that schema
-5. If best match score is 50-80%, ask the user to confirm
-6. If best match score < 50%, ask the user to provide the correct schema
-
-To read the header row, use Python:
 ```python
-import csv
-with open(filepath, 'r') as f:
-    reader = csv.reader(f)
-    headers = next(reader)
+def score_schema_match(csv_header, schema_columns):
+    matched = [c for c in csv_header if c in schema_columns]
+    missing = [c for c in schema_columns if c not in csv_header]
+    extra = [c for c in csv_header if c not in schema_columns]
+    score = len(matched) / max(len(schema_columns), 1)
+    return {
+        "score": score,
+        "matched": matched,
+        "missing": missing,
+        "extra": extra,
+    }
 ```
 
-To score schemas, iterate through each `.json` file in `reference/schemas/`:
-```python
-import json
-import os
+If the score is below 0.5, stop and report the mismatch to the user before
+continuing — do not attempt to validate a CSV that does not resemble the
+schema.
 
-def score_schema(headers, schema_path):
-    with open(schema_path) as f:
-        schema = json.load(f)
-    schema_cols = set(schema['columns'].keys())
-    header_set = set(headers)
-    if not schema_cols:
-        return 0
-    return len(schema_cols & header_set) / len(schema_cols) * 100
-```
+## Step 2: Type Validation
 
-Then select the best match:
-```python
-best_score = 0
-best_schema = None
-for fname in os.listdir('reference/schemas/'):
-    if fname.endswith('.json'):
-        path = os.path.join('reference/schemas/', fname)
-        score = score_schema(headers, path)
-        if score > best_score:
-            best_score = score
-            best_schema = path
-```
-
-### Step 2: Type Validation
-
-For each column defined in the schema, validate that every value in the CSV matches the expected type.
-
-Schema type definitions:
-- `"string"` - Any non-empty text
-- `"integer"` - Whole numbers (no decimals)
-- `"float"` - Decimal numbers
-- `"date"` - ISO 8601 format (YYYY-MM-DD)
-- `"email"` - Valid email format (contains @ with domain)
-- `"phone"` - Digits, spaces, hyphens, parentheses, plus sign
-- `"boolean"` - true/false, yes/no, 1/0 (case-insensitive)
-
-To validate types, iterate through each row and check each cell:
+For every declared column, check that every cell in that column parses as
+the declared type (`string`, `integer`, `float`, `date`, `email`, `phone`,
+`boolean`).
 
 ```python
 import re
-from datetime import datetime
 
-def validate_type(value, expected_type):
-    if not value or value.strip() == '':
-        return True  # Empty values handled by required check
+TYPE_CHECKS = {
+    "integer": lambda v: re.fullmatch(r"-?\d+", v) is not None,
+    "float": lambda v: re.fullmatch(r"-?\d+(\.\d+)?", v) is not None,
+    "date": lambda v: re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) is not None,
+    "email": lambda v: re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", v) is not None,
+    "phone": lambda v: re.fullmatch(r"\+?\d[\d\-\s]{6,}\d", v) is not None,
+    "boolean": lambda v: v.lower() in {"true", "false", "1", "0"},
+    "string": lambda v: True,
+}
 
-    value = value.strip()
-
-    if expected_type == 'string':
-        return len(value) > 0
-    elif expected_type == 'integer':
-        try:
-            int(value)
-            return True
-        except ValueError:
-            return False
-    elif expected_type == 'float':
-        try:
-            float(value)
-            return True
-        except ValueError:
-            return False
-    elif expected_type == 'date':
-        try:
-            datetime.strptime(value, '%Y-%m-%d')
-            return True
-        except ValueError:
-            return False
-    elif expected_type == 'email':
-        return bool(re.match(r'^[^@]+@[^@]+\.[^@]+$', value))
-    elif expected_type == 'phone':
-        return bool(re.match(r'^[\d\s\-\(\)\+]+$', value))
-    elif expected_type == 'boolean':
-        return value.lower() in ('true', 'false', 'yes', 'no', '1', '0')
-    return False
+def validate_type(value, declared_type):
+    check = TYPE_CHECKS.get(declared_type)
+    if check is None:
+        raise ValueError(f"Unknown type: {declared_type}")
+    return check(value)
 ```
 
-Then run validation across all rows:
+## Step 3: Required-Field Validation
+
+For every column marked `"required": true` in the schema, check that no row
+has a blank or missing value in that column.
 
 ```python
-errors = []
-with open(filepath, 'r') as f:
-    reader = csv.DictReader(f)
-    for row_num, row in enumerate(reader, start=2):  # start=2 because row 1 is header
-        for col_name, col_def in schema['columns'].items():
-            if col_name in row:
-                if not validate_type(row[col_name], col_def['type']):
-                    errors.append({
-                        'row': row_num,
-                        'column': col_name,
-                        'value': row[col_name],
-                        'expected_type': col_def['type'],
-                        'error': f"Type mismatch: expected {col_def['type']}"
-                    })
+def validate_required(rows, column, is_required):
+    if not is_required:
+        return []
+    violations = []
+    for i, row in enumerate(rows):
+        value = row.get(column, "")
+        if value is None or str(value).strip() == "":
+            violations.append(i)
+    return violations
 ```
 
-### Step 3: Required Field Validation
+## Step 4: Range Validation
 
-Check that all required fields have non-empty values:
+For every column with `"min"` and/or `"max"` declared, check that every
+numeric value falls within the declared bounds.
 
 ```python
-for row_num, row in enumerate(reader, start=2):
-    for col_name, col_def in schema['columns'].items():
-        if col_def.get('required', False):
-            if col_name not in row or not row[col_name] or row[col_name].strip() == '':
-                errors.append({
-                    'row': row_num,
-                    'column': col_name,
-                    'error': f"Required field '{col_name}' is empty"
-                })
+def validate_range(rows, column, min_value=None, max_value=None):
+    violations = []
+    for i, row in enumerate(rows):
+        raw = row.get(column)
+        if raw is None or raw == "":
+            continue
+        value = float(raw)
+        if min_value is not None and value < min_value:
+            violations.append((i, value, "below-min"))
+        if max_value is not None and value > max_value:
+            violations.append((i, value, "above-max"))
+    return violations
 ```
 
-### Step 4: Range Validation
+## Step 5: Referential Integrity
 
-For numeric columns with min/max constraints:
+For every column with a `"references"` block, check that every value in
+that column exists as a value in the referenced file's referenced column.
 
 ```python
-for row_num, row in enumerate(reader, start=2):
-    for col_name, col_def in schema['columns'].items():
-        if col_name in row and row[col_name].strip():
-            value = row[col_name].strip()
-            if 'min' in col_def:
-                try:
-                    num_val = float(value)
-                    if num_val < col_def['min']:
-                        errors.append({
-                            'row': row_num,
-                            'column': col_name,
-                            'value': value,
-                            'error': f"Value {value} below minimum {col_def['min']}"
-                        })
-                except ValueError:
-                    pass
-            if 'max' in col_def:
-                try:
-                    num_val = float(value)
-                    if num_val > col_def['max']:
-                        errors.append({
-                            'row': row_num,
-                            'column': col_name,
-                            'value': value,
-                            'error': f"Value {value} above maximum {col_def['max']}"
-                        })
-                except ValueError:
-                    pass
+def validate_references(rows, column, ref_file, ref_column, ref_loader):
+    ref_values = set(ref_loader(ref_file, ref_column))
+    violations = []
+    for i, row in enumerate(rows):
+        value = row.get(column)
+        if value is None or value == "":
+            continue
+        if value not in ref_values:
+            violations.append((i, value))
+    return violations
 ```
 
-### Step 5: Referential Integrity
+## Step 6: Report Generation
 
-If the schema defines foreign key relationships, validate that referenced values exist:
+Combine the results of Steps 2–5 into a single structured report, grouped by
+row, sorted by row number, with a summary count at the top.
 
 ```python
-for col_name, col_def in schema['columns'].items():
-    if 'references' in col_def:
-        ref_file = col_def['references']['file']
-        ref_col = col_def['references']['column']
+def build_report(type_errors, required_errors, range_errors, ref_errors):
+    by_row = {}
+    for row_idx, col, kind in type_errors:
+        by_row.setdefault(row_idx, []).append(f"{col}: type mismatch ({kind})")
+    for row_idx in required_errors:
+        by_row.setdefault(row_idx, []).append("required field missing")
+    for row_idx, value, kind in range_errors:
+        by_row.setdefault(row_idx, []).append(f"range violation ({kind}): {value}")
+    for row_idx, value in ref_errors:
+        by_row.setdefault(row_idx, []).append(f"referential integrity: {value} not found")
 
-        # Load reference values
-        ref_values = set()
-        with open(ref_file, 'r') as rf:
-            ref_reader = csv.DictReader(rf)
-            for ref_row in ref_reader:
-                if ref_col in ref_row:
-                    ref_values.add(ref_row[ref_col].strip())
-
-        # Check each value
-        with open(filepath, 'r') as f:
-            reader = csv.DictReader(f)
-            for row_num, row in enumerate(reader, start=2):
-                if col_name in row and row[col_name].strip():
-                    if row[col_name].strip() not in ref_values:
-                        errors.append({
-                            'row': row_num,
-                            'column': col_name,
-                            'value': row[col_name],
-                            'error': f"Referenced value not found in {ref_file}:{ref_col}"
-                        })
-```
-
-### Step 6: Generate Report
-
-After all validations, generate a summary report:
-
-1. Count total errors by type (type mismatch, required, range, referential)
-2. Count errors per column
-3. Show first 10 errors of each type with row numbers
-4. Calculate overall pass/fail status: PASS if 0 errors, WARN if < 1% error rate, FAIL otherwise
-
-Format the report as markdown:
-
-```markdown
-# Validation Report: {filename}
-
-## Summary
-- **Status**: PASS/WARN/FAIL
-- **Total Rows**: {count}
-- **Total Errors**: {count}
-- **Error Rate**: {percentage}%
-
-## Errors by Type
-| Type | Count |
-|------|-------|
-| Type Mismatch | {n} |
-| Required Field | {n} |
-| Range Violation | {n} |
-| Referential Integrity | {n} |
-
-## Error Details
-### Type Mismatches (showing first 10)
-| Row | Column | Value | Expected |
-|-----|--------|-------|----------|
-| ... | ... | ... | ... |
-
-[repeat for other error types]
+    report_lines = [f"Total rows with errors: {len(by_row)}"]
+    for row_idx in sorted(by_row):
+        report_lines.append(f"Row {row_idx}: " + "; ".join(by_row[row_idx]))
+    return "\n".join(report_lines)
 ```
 
 ## Schema Format
 
-Schemas are JSON files with this structure:
+Schemas are JSON files with the following shape:
 
 ```json
 {
-  "name": "schema_name",
-  "description": "What this schema validates",
+  "name": "...",
+  "description": "...",
   "columns": {
-    "column_name": {
+    "<col>": {
       "type": "string|integer|float|date|email|phone|boolean",
       "required": true,
       "min": 0,
       "max": 100,
-      "references": {
-        "file": "path/to/reference.csv",
-        "column": "id"
-      }
+      "references": { "file": "path.csv", "column": "id" }
     }
   }
 }
@@ -276,7 +157,12 @@ Schemas are JSON files with this structure:
 
 ## Common Issues
 
-- **Encoding**: Always open CSV files with `encoding='utf-8-sig'` to handle BOM markers
-- **Line endings**: Use `newline=''` parameter when opening CSV files
-- **Large files**: For files over 100MB, process in chunks of 10000 rows
-- **Date formats**: If dates aren't ISO 8601, check for common alternatives (MM/DD/YYYY, DD-MM-YYYY) before flagging as errors
+- **Encoding mismatches**: CSVs exported from spreadsheet tools sometimes
+  use a BOM or non-UTF-8 encoding. If parsing fails outright, ask the user
+  which encoding the file was exported with before proceeding.
+- **Ambiguous date formats**: `01/02/2024` could be January 2nd or February
+  1st depending on locale. When a schema's `date` column doesn't specify a
+  format, ask the user to confirm rather than guessing.
+- **Schema drift**: if the CSV header has columns the schema doesn't
+  mention, decide with the user whether those are safe to ignore or signal
+  that the schema itself is out of date.

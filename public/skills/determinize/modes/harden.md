@@ -1,41 +1,23 @@
 # Harden Mode
 
-## Overview
+## Core insight
 
-**Harden existing skills by extracting deterministic procedures into helper scripts.**
+Extracting a deterministic procedure out of prose and into a script
+eliminates LLM variance for that procedure — the same input will always
+produce the same output, because a script has no judgment to vary. This is
+**not** about consuming fewer resources. A 200-line step-by-step procedure
+that an LLM currently re-reads and re-executes on every invocation becomes
+a single line: `Run: scripts/do_thing.<ext> <args>`. The win is that the
+script gets it right the same way every time; the trade-off is that the
+result is more brittle than prose an LLM can flex around when
+circumstances differ slightly.
 
-Core insight: The biggest value comes from **extracting deterministic procedures into helper scripts** — not for token savings, but because deterministic scripts produce identical output for identical input, eliminating LLM variance for those phases. A 200-line procedure in SKILL.md that an LLM must reason through becomes `run scripts/do_thing.<ext>` — the script executes with guaranteed correctness for computational tasks.
+## Required background skills
 
-**The trade-off:** Hardened skills are more predictable and robust but also more brittle. If inputs change in ways the script doesn't anticipate, you must modify the script rather than relying on LLM flexibility.
+Load these before proceeding:
 
-**REQUIRED BACKGROUND:**
-- superpowers:test-driven-development
-- superpowers:writing-skills
-
-## Staged Execution
-
-This process is split into 6 stages. **Read each stage file ONLY when you reach that stage.** Do NOT read ahead.
-
-```
-Stage 1: Inventory        → Read harden-stages/inventory.md
-Stage 2: Classify & Score → Read harden-stages/classify-and-score.md
-Stage 3: Baseline Tests   → Read harden-stages/baseline-tests.md
-Stage 4: Extract          → Read harden-stages/extract.md
-Stage 5: Verify           → Read harden-stages/verify.md
-Stage 6: Commit & Finalize→ Read harden-stages/commit-and-finalize.md
-```
-
-**Each stage has a gate condition.** Do NOT proceed to the next stage until the current stage's gate is satisfied. The gate is at the bottom of each stage file.
-
-**Reading ahead is a violation.** Do NOT read `extract.md` while working on `classify-and-score.md`. Do NOT read `verify.md` while working on `baseline-tests.md`. Each stage tells you exactly which file to read next. If you find yourself wanting to "understand the full process first" — that's the read-ahead rationalization. Trust the gates.
-
-## Language Selection
-
-Extracted helper scripts can be written in any supported scripting language. Available languages have reference files in `references/`.
-
-1. **If the user specified a language** in their prompt (e.g., "use JavaScript for scripts"), use it.
-2. **If no language was specified**, ask the user which language they prefer before proceeding.
-3. **Load `references/<language>.md`** for the chosen language and use its substitutions throughout.
+- `superpowers:test-driven-development`
+- `superpowers:writing-skills`
 
 ## The Iron Law
 
@@ -43,75 +25,89 @@ Extracted helper scripts can be written in any supported scripting language. Ava
 NO HARDENING WITHOUT BASELINE TESTS FIRST
 ```
 
-Wrote hardened SKILL.md before testing the original? Delete it. Start over.
+If baseline tests are skipped or written after the fact, delete the
+extraction work and restart from Stage 3. There are no exceptions,
+including these three that come up often:
 
-**No exceptions:**
-- Not because "the extraction is obvious"
-- Not because "it's just extracting code blocks"
-- Not because "I can backfill tests after"
-- Backfilled tests prove nothing - they test what you built, not what you should have preserved
+- "the extraction is obvious"
+- "just moving code blocks"
+- "I'll backfill tests"
 
-## Begin
+## Language selection
 
-**Start now:** Read `harden-stages/inventory.md` and follow its instructions.
+Determine the extraction language before Stage 4 at the latest:
 
-Do NOT read any other stage file until directed to by the current stage's gate condition.
+- If the user specified a language, use it.
+- Otherwise, ask the user before proceeding.
 
-## Output Structure
+Then load `references/<language>.md`. Only languages with a reference file
+are available: `python`, `javascript`.
+
+## Stage pipeline
+
+| Stage | File | Title |
+|---|---|---|
+| 1 | `harden-stages/inventory.md` | File Inventory |
+| 2 | `harden-stages/classify-and-score.md` | Classify and Score |
+| 3 | `harden-stages/baseline-tests.md` | Baseline Tests |
+| 4 | `harden-stages/extract.md` | Extract |
+| 5 | `harden-stages/verify.md` | Verify |
+| 6 | `harden-stages/commit-and-finalize.md` | Commit and Finalize |
+
+## No-read-ahead rule
+
+Read exactly one stage file at a time. Each stage file ends with a Gate
+that names the next file to read. Reading ahead — even "just to understand
+the full process" — is a violation of this rule, because it leads to
+stage-skipping. The rationalization "I'll read ahead to understand the
+full process first" is explicitly forbidden.
+
+## Promised output structure
 
 ```
 <skill-name>-hardened/
   SKILL.md
-  scripts/           # Extracted helper scripts
-  references/        # Inherited from original (if any)
-  tests/             # Regression tests (ALWAYS present)
+  scripts/           # extracted helper scripts
+  references/        # inherited from original (if any)
+  tests/             # regression tests (ALWAYS present, never deleted)
     baseline-results.md
     scenario-*.md
 ```
 
-**The `tests/` folder is MANDATORY.** It lives inside the hardened skill folder and is never deleted.
-
-## Red Flags - STOP
-
-If you catch yourself thinking any of these, STOP:
-
-- "The extraction is obvious, I don't need baseline tests"
-- "I can see exactly what to extract, testing would waste time"
-- "I'll write tests after to verify"
-- "This is just moving code, what could go wrong?"
-- "Let me create a script for this checklist/decision tree"
-- "I should also restructure the reference material while I'm at it"
-
-**All of these mean: Go back to Stage 3. Baseline first.**
+## Red flags
 
 | Rationalization | Reality |
-|----------------|---------|
+|---|---|
 | "Extraction is obvious" | Obvious extractions still break subtle behavior. Test first. |
 | "Backfill tests after" | Tests written after hardening verify what you built, not what you should preserve. Worthless. |
-| "Just extracting code blocks" | Code blocks have context (thresholds, error formats, edge cases). Easy to lose. |
-| "I'll script this checklist" | Checklists are non-deterministic (require judgment). Scripts for non-deterministic content waste effort. |
+| "Just extracting code blocks" | Code blocks carry context (thresholds, error formats, edge cases). Easy to lose. |
+| "I'll script this checklist" | Checklists require judgment → non-deterministic → scripting them wastes effort. |
 | "No scripts found, but I can still restructure" | If no deterministic procedures exist, hardening doesn't apply. Exit cleanly. |
 | "I'll read ahead to understand the full process" | Each stage gives you exactly what you need. Reading ahead causes stage-skipping. |
 
-## Quick Reference
+## Quick reference
 
-| Skill Content Type | Hardening Strategy |
-|-------------------|--------------------|
+| Skill content type | Hardening strategy |
+|---|---|
 | Deterministic procedures | Extract to helper scripts |
 | Non-deterministic content (judgment, guidelines) | Leave in SKILL.md — LLM flexibility is the value |
 | Reference material (schemas, examples) | Leave in SKILL.md — no hardening benefit |
 
-## Common Mistakes
+## Common mistakes
 
-| Mistake | Fix |
-|---------|-----|
-| Skipping baseline tests | Always Stage 3 first |
-| Reading ahead to later stages | Read ONLY the current stage file |
-| Forcing scripts on non-deterministic content | Recognize when script extraction doesn't apply |
-| Modifying the original skill | Always create `<name>-hardened/` copy |
-| Forgetting to save tests | Tests go in `<name>-hardened/tests/` - mandatory |
-| Not testing extracted scripts | Run each script to verify it works |
-| Framing value as token savings | The value is determinism (same input = same output), not efficiency |
-| Creating a deprecated/archived folder | Git history is the recovery mechanism — the commit in Stage 6 preserves both versions |
-| Committing original + hardened together | Commit ONLY hardened files in Stage 6 to create a clean recovery point |
-| Combining classification with test writing | Complete ALL of Stage 2 before starting Stage 3 |
+| Mistake | Correction |
+|---|---|
+| Skipping baseline tests | Always do Stage 3 first — no exceptions. |
+| Reading ahead | Read only the current stage file. |
+| Forcing scripts onto non-deterministic content | Leave judgment-based content in prose. |
+| Modifying the original skill directly | Always create a `-hardened/` copy instead. |
+| Forgetting to save tests | Tests are mandatory and live in `<name>-hardened/tests/`. |
+| Not testing extracted scripts | Actually run each script against sample input. |
+| Framing the value as resource savings | The value is determinism, not speed or cost. |
+| Creating a deprecated/archived folder | Git history is the recovery mechanism — no archive folders. |
+| Committing original and hardened together | Commit ONLY the hardened files in Stage 6. |
+| Combining classification with test writing | Finish all of Stage 2 before starting Stage 3. |
+
+## Start
+
+Read `harden-stages/inventory.md` next.

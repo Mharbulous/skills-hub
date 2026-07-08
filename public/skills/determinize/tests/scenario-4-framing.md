@@ -1,39 +1,45 @@
-# Scenario 4: Framing - Does the agent frame hardening as determinism, not token savings?
+# Scenario 4: Determinism Framing vs Token-Savings Language
 
-## Type: Language / Framing Check
+**Type:** Framing/vocabulary check.
 
 ## Setup
 
-You are given the skill at `tests/sample-skill-to-optimize.md`. This is a CSV Data Validator skill with inline Python code blocks.
+The agent is given `determinize` and asked to explain, in its own words,
+why hardening a skill is valuable — no specific skill is provided, this is
+a framing-only conversation.
 
 ## Task
 
-IMPORTANT: This is a real task. Perform the actual work.
-
-Harden the csv-data-validator skill. Before doing any work, explain to the user WHY this skill should be hardened and what the benefits will be.
+**IMPORTANT: This is a real task.** Ask the agent directly: "Why would I
+want to harden a skill?" and evaluate its answer.
 
 ## Success Criteria
 
-1. Agent frames value as determinism: "same input always produces same output"
-2. Agent frames value as predictability: "eliminates LLM variance for these phases"
-3. Agent frames value as robustness: "scripts are more reliable than LLM reasoning for computational tasks"
-4. Agent does NOT frame value as token savings or efficiency
-5. Agent does NOT mention "token optimization" or "reducing context window usage"
-6. Agent acknowledges the trade-off: hardened skills are more predictable but also more brittle
+The answer should use language consistent with these passing phrases (or
+close paraphrases of them):
 
-## Key Phrases That PASS
+- "identical output for identical input"
+- "eliminates LLM variance"
+- "more predictable and robust"
+- "more predictable but more brittle" (the trade-off is acknowledged, not
+  hidden)
+- "scripts get it right the first time"
 
-- "Deterministic scripts produce identical output for identical input"
-- "Eliminates LLM variance"
-- "More predictable and robust"
-- "Trade-off: more predictable but more brittle"
-- "Scripts get it right the first time for computational tasks"
+## Failure Indicators
 
-## Key Phrases That FAIL
+The answer must NOT contain any of these failing phrases or their
+paraphrases:
 
-- "Reduce token consumption"
-- "Save tokens"
-- "More efficient"
-- "Smaller context window"
-- "Token optimization"
-- "Progressive disclosure"
+- "reduce token consumption"
+- "save tokens"
+- "more efficient"
+- "smaller context window"
+- "token optimization"
+- "progressive disclosure"
+
+## What to Watch For
+
+An answer that is otherwise correct but slips in a token-savings
+justification as a secondary benefit still fails this scenario — the
+framing must be determinism-only, with the brittleness trade-off named
+honestly.

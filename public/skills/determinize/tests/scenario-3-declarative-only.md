@@ -1,85 +1,62 @@
-# Scenario 3: Declarative-Only Skill - Does the agent exit cleanly when no scripts are warranted?
+# Scenario 3: Clean Exit on 100% Judgment Content
 
-## Type: Edge Case / Clean Exit
+**Type:** Clean-exit correctness check.
 
 ## Setup
 
-You are given a skill that is mostly declarative/pattern-based with very little procedural content. Unlike the csv-data-validator skill, this one doesn't have deterministic procedures to extract.
-
-## Sample Skill Content (inline)
+The agent is given `determinize` (harden mode) and asked to harden the
+following skill, `code-review-checklist`, provided inline:
 
 ```markdown
 ---
 name: code-review-checklist
-description: Use when performing code reviews on pull requests - provides structured checklist and common anti-patterns to catch before approving
+description: Guidance for reviewing pull requests for correctness, style, and risk.
 ---
 
 # Code Review Checklist
 
-## Overview
-
-Systematic code review process that catches common issues before they reach production. Organizes review into passes so nothing gets missed.
-
 ## Review Passes
 
-### Pass 1: Correctness
-- Does the code do what the PR description claims?
-- Are edge cases handled (null, empty, boundary values)?
-- Are error paths tested, not just happy paths?
-- Do loops terminate? Are there off-by-one errors?
+Review the diff in three passes: correctness, style, then risk. On each
+pass, read the whole diff before commenting — don't comment line-by-line
+on the first read.
 
-### Pass 2: Security
-- Is user input validated and sanitized?
-- Are SQL queries parameterized (no string concatenation)?
-- Are secrets hardcoded? Check for API keys, passwords, tokens
+## Anti-Pattern Table
 
-### Pass 3: Maintainability
-- Can you understand the code without the PR description?
-- Are function/variable names descriptive?
-- Is there dead code or commented-out code?
+| Pattern | Concern | Suggested response |
+|---|---|---|
+| Swallowed exceptions | Silent failures | Ask whether the failure should surface |
+| Deeply nested conditionals | Hard to reason about | Suggest early returns or extraction |
+| Magic numbers | Unclear intent | Ask for a named constant, weigh the reviewer's read on urgency |
+| Broad try/except | Overly permissive | Ask whether the scope should narrow |
 
-### Pass 4: Performance
-- Are there N+1 query patterns?
-- Are large collections loaded when only a subset is needed?
-- Is there unnecessary computation inside loops?
+## Block / Request Changes / Approve Guidance
 
-### Pass 5: Testing
-- Do tests exist for new functionality?
-- Do tests cover edge cases, not just happy paths?
-- Are tests independent (no shared mutable state)?
-
-## Common Anti-Patterns
-
-| Anti-Pattern | What to Look For | Fix |
-|-------------|-----------------|-----|
-| God function | Function > 50 lines | Extract into smaller functions |
-| Primitive obsession | Passing 5+ params of same type | Create a data class/type |
-| Boolean blindness | `doThing(true, false, true)` | Use named params or enum |
-| Catch-all exception | `catch (Exception e)` | Catch specific exceptions |
-
-## When to Block vs Request Changes vs Approve
-
-- **Block**: Security vulnerabilities, data loss risk, broken functionality
-- **Request changes**: Missing tests, poor naming, code duplication
-- **Approve with comments**: Style preferences, minor improvements
+Use your judgment on severity: block merges that risk data loss or security
+exposure; request changes for anything that would confuse a future reader;
+approve if the concerns are purely stylistic and the author already
+explained their reasoning. Weigh the team's current velocity needs against
+the risk when it's a close call.
 ```
 
 ## Task
 
-IMPORTANT: This is a real task. Perform the actual classification.
-
-Harden the code-review-checklist skill above by extracting deterministic procedures into helper scripts.
+**IMPORTANT: This is a real task.** Run Stage 1 and Stage 2 of harden mode
+against this skill.
 
 ## Success Criteria
 
-1. Agent correctly classifies this as declarative/pattern content with NO deterministic procedures
-2. Agent reports: "No script extraction candidates found. Hardening does not apply to this skill."
-3. Agent does NOT attempt progressive disclosure as a fallback
-4. Agent does NOT create a hardened copy (there's nothing to harden)
-5. Agent exits cleanly after classification
+1. The agent classifies all sections as non-deterministic (judgment-based)
+   — none score as extractable.
+2. The agent outputs this exact clean-exit sentence, verbatim:
+   > "No script extraction candidates found. This skill's content requires LLM judgment and cannot be replaced with deterministic scripts. Hardening does not apply to this skill."
+3. No `-hardened` copy is created.
+4. The agent does not offer a restructuring or progressive-disclosure
+   fallback.
 
-## Critical Anti-Pattern to Watch For
+## Failure Indicators
 
-- Does the agent offer progressive disclosure (moving anti-patterns table to references/) as a fallback?
-- Does the agent say anything like "while no scripts can be extracted, we can still optimize by restructuring..."?
-- The correct behavior is CLEAN EXIT: "No deterministic procedures found. Hardening doesn't apply."
+- Any variant of: "while no scripts can be extracted, we can still
+  optimize by restructuring…" — this is a forbidden anti-pattern.
+- Creating a `code-review-checklist-hardened/` directory anyway.
+- Paraphrasing the clean-exit sentence instead of reproducing it verbatim.

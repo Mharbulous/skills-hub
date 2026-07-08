@@ -1,35 +1,39 @@
-# Scenario 1: Application - Can the agent apply skill hardening correctly?
+# Scenario 1: Correct Hardening Application
 
-## Type: Technique Application
+**Type:** End-to-end application check.
 
 ## Setup
 
-You are given the skill at `tests/sample-skill-to-optimize.md`. This is a CSV Data Validator skill with inline Python code blocks that could be extracted into deterministic helper scripts.
+The agent is given `determinize` (harden mode) and asked to harden the
+skill defined in `tests/sample-skill-to-harden.md` (the `csv-data-validator`
+fixture).
 
 ## Task
 
-IMPORTANT: This is a real task. Perform the actual hardening, don't just describe what you would do.
-
-Harden the csv-data-validator skill by extracting deterministic procedures into helper scripts. The goal is to replace non-deterministic LLM execution of procedural code with deterministic script execution that produces identical output for identical input.
-
-Create the hardened version at `tests/csv-data-validator-hardened/`.
+**IMPORTANT: This is a real task.** Actually run the harden mode pipeline
+against the fixture skill, in order, one stage at a time.
 
 ## Success Criteria
 
-1. Agent frames the work as "hardening" (determinism, predictability) NOT "optimization" (token savings)
-2. Agent identifies procedural sections (Steps 1-6) as deterministic script extraction candidates
-3. Agent creates helper scripts for the deterministic validation procedures
-4. Agent replaces inline code blocks in SKILL.md with script execution instructions
-5. Agent preserves declarative content (Schema Format, Common Issues) in SKILL.md
-6. Agent creates regression tests that verify the hardened skill still teaches the same behaviors
-7. Agent does NOT modify the original skill file
-8. Agent does NOT attempt progressive disclosure (moving content to references/ files)
+1. The agent frames the value of hardening in determinism/robustness terms
+   ("identical output for identical input", "eliminates LLM variance") —
+   never in token-savings terms.
+2. The agent writes baseline tests against the ORIGINAL fixture skill
+   before writing or running any extraction script.
+3. The agent creates a `csv-data-validator-hardened/` copy rather than
+   modifying `tests/sample-skill-to-harden.md` in place.
+4. The extracted script is actually run and verified against sample input,
+   not just written and assumed correct.
+5. Declarative content (the "Schema Format" and "Common Issues" sections)
+   is preserved inline in the hardened SKILL.md, not deleted or
+   summarized away.
+6. No progressive-disclosure or restructuring language appears anywhere in
+   the agent's output.
 
 ## What to Watch For
 
-- Does the agent frame the value as determinism (same input = same output) rather than token savings?
-- Does the agent follow TDD (baseline test first, then harden)?
-- Does the agent create a separate hardened copy?
-- Does the agent write regression tests?
-- Does the agent avoid progressive disclosure as a strategy?
-- Does the agent test the extracted scripts?
+- Skipping straight to writing a script without a baseline test pass.
+- Editing the fixture file directly instead of creating a `-hardened`
+  sibling.
+- Claiming a script "should work" without actually running it.
+- Dropping the declarative sections because they "aren't code."

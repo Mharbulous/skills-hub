@@ -1,81 +1,78 @@
-# Stage 2: Classify & Score
+# Stage 2: Classify and Score
 
 ## Goal
 
-Classify every section of the skill and score deterministic sections against the 11 heuristics. Present ranked extraction candidates to the user for selection.
+Classify every SKILL.md section from Stage 1's inventory as deterministic
+or not, score the deterministic ones, and select exactly one extraction
+candidate for this run (or exit cleanly if none qualify).
 
 ## Prerequisites
 
-- Stage 1 (Inventory) must be complete — you need the section list and line ranges.
-- **Load the determinism framework:** Read `references/determinism-heuristics.md` now.
+- Stage 1's inventory and section list.
+- Load `references/determinism-heuristics.md` now — its rubrics and
+  formula are used throughout this stage and are not repeated here.
 
 ## Steps
 
-### Step 1 — Classify Each Section
+### Step 1: The determinism question
 
-For each section identified in the inventory:
+For each section from Stage 1's list, ask:
 
-**Ask the determinism question:** "Given identical input, would this section always produce identical output?"
+> **Given identical input, would this section always produce identical
+> output?**
 
-- **If NO** — Mark as non-deterministic (requires LLM judgment). Note why.
-- **If YES** — Mark as deterministic. Proceed to heuristic scoring.
+Classification runs on determinism, not on format:
 
-**Classification is determinism-based, NOT format-based:**
-- Tables of transformation rules (normalization, scoring thresholds) ARE script-extractable
-- Code blocks with judgment calls ("review and decide") are NOT script-extractable
-- Checklists requiring context-dependent interpretation are NOT script-extractable
-- Step-by-step procedures with enumerable branches ARE script-extractable
+- Tables of transformation rules (normalization, scoring thresholds) **ARE**
+  script-extractable.
+- Code blocks containing judgment calls ("review and decide") are **NOT**
+  script-extractable.
+- Checklists needing context-dependent interpretation are **NOT**
+  script-extractable.
+- Step-by-step procedures with enumerable branches **ARE**
+  script-extractable.
 
-### Step 2 — Score Deterministic Sections
+Sections that answer NO are marked Declarative/Reference and set aside.
 
-For each section that passed the determinism test, score 0-3 points per heuristic:
+### Step 2: Score
 
-1. Computational Intensity (0-3)
-2. Data Volume with Low Signal Density (0-3)
-3. Iteration Over Collections (0-3)
-4. Precision-Critical Operations (0-3)
-5. State Accumulation Across Items (0-3)
-6. File I/O as Filtering (0-3)
-7. Cross-Referencing Between Datasets (0-3)
-8. Format Transformation (0-3)
-9. Multi-Step Deterministic Pipelines (0-3)
-10. Redundant Computation Across Phases (0-3)
-11. Enumerable Branching (0-3)
+For each section that answers YES, score it 0–3 on all 11 heuristics
+defined in `references/determinism-heuristics.md`. Do not duplicate the
+full rubric text here — read it from that reference.
 
-See `references/determinism-heuristics.md` for detailed scoring guidance.
+### Step 3: Rank
 
-**Sum scores for each candidate section** (max 33 points per section).
-
-### Step 3 — Calculate Determinism Value
-
-For each scored section:
+Compute each scored section's Determinism Value:
 
 ```
-Determinism Value = (Heuristic Score / 33) x (Section Complexity) x (Execution Frequency)
-
-Where:
-- Heuristic Score = sum of 11 heuristic scores (0-33)
-- Section Complexity = number of lines in section
-- Execution Frequency = how many times this section runs per skill invocation
+Determinism Value = (Heuristic Score / 33) × (Section line count) × (Execution frequency per invocation)
 ```
 
-**Rank candidates by determinism value** (highest first).
+"Execution frequency per invocation" is an estimate, not a precise count —
+judge qualitatively how many times per hardening run this section's logic
+would execute (once per run, once per item in a loop, etc.) and use that
+as the multiplier.
 
-### Step 4 — Check Prior Hardening Attempts
+Priority bands: **High** (≥18) extract first; **Medium** (9–17) extract if
+time permits; **Low** (≤8) skip.
 
-Search git history:
+### Step 4: Git-history check
 
-```bash
+Run:
+
+```
 git log --all --grep="\[hardening:<skill-name>:" --oneline --format="%h %s (%ai)"
 ```
 
-If matches found, display a "Previously Attempted Hardenings" section before the candidate list. This is informational only — previously-attempted candidates can still be selected.
+substituting the actual skill name. If this returns any matches, display a
+"Previously Attempted Hardenings" section — listing commit hash, script
+name, and date for each match — **before** the candidate list in Step 5.
+This is informational only: it never filters or excludes candidates. If no
+matches are found, skip this section silently (don't mention its absence).
 
-If no matches found, skip silently.
+### Step 5: Present top 3
 
-### Step 5 — Present Candidates
-
-**Present top 3 candidates to user:**
+Present the top 3 scored candidates:
 
 ```
 Top Script Extraction Candidates:
@@ -83,44 +80,39 @@ Top Script Extraction Candidates:
 1. [Section Name]
    - Heuristic Score: X/33
    - Determinism Value: X,XXX
-   - Key heuristics: [Which scored highest]
-   - Why extract: [What LLM variance this eliminates]
-
-2. [Section Name]
-   - ...
-
-3. [Section Name]
-   - ...
+   - Key heuristics: [which scored highest]
+   - Why extract: [what LLM variance this eliminates]
+2. ...
+3. ...
 ```
 
-**Interactive Mode (HITL):**
+**HITL mode:** ask "Which candidate should I extract first? (Enter 1, 2, or
+3, or 'skip' if no extraction is warranted)" and wait for the response.
 
-Ask the user: "Which candidate should I extract first? (Enter 1, 2, or 3, or 'skip' if no extraction is warranted)"
+**Autonomous mode:** auto-select #1 and announce: "Auto-selecting
+highest-ranked candidate: [Section Name] (Determinism Value: X,XXX)".
 
-Wait for user response and proceed with their choice.
+### One-at-a-time principle
 
-**Autonomous Mode (no HITL):**
+Exactly ONE extraction happens per hardening run, even if multiple
+candidates score High.
 
-Auto-select the highest-ranked candidate (candidate #1) and state: "Auto-selecting highest-ranked candidate: [Section Name] (Determinism Value: X,XXX)"
+### Clean-exit branch
 
-**One-at-a-time principle:** Only ONE script is extracted per hardening run, regardless of how many candidates are identified.
+If no section scores as an extraction candidate (every section is
+Declarative/Reference, or every deterministic section falls below the
+extraction threshold), show the classification breakdown, then state
+exactly:
 
-### No Candidates Found — STOP
+> "No script extraction candidates found. This skill's content requires LLM judgment and cannot be replaced with deterministic scripts. Hardening does not apply to this skill."
 
-When classification reveals no deterministic procedural content, STOP and report:
-
-1. Show classification breakdown (% deterministic vs non-deterministic)
-2. State: "No script extraction candidates found. This skill's content requires LLM judgment and cannot be replaced with deterministic scripts. Hardening does not apply to this skill."
-3. End session. No `-hardened` copy is created.
-
-**If a skill has no deterministic content, script extraction does NOT apply.** Do NOT force scripts where none are warranted.
+End the session. Do not create a `-hardened` copy. Do not offer a
+progressive-disclosure or restructuring fallback of any kind.
 
 ## Gate
 
-**Do NOT proceed to Stage 3 until:**
-- Every section has been classified (determinism question answered)
-- All deterministic sections have been scored against all 11 heuristics
-- Candidates have been presented to the user
-- User has selected a candidate (or process has ended due to no candidates)
+Before proceeding: confirm all sections are classified, all deterministic
+sections are fully scored, and a candidate is selected (or the clean-exit
+branch was taken, in which case the session has already ended).
 
-**When complete:** Read `harden-stages/baseline-tests.md` and follow its instructions.
+**Read `baseline-tests.md` next.**

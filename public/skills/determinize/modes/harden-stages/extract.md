@@ -2,58 +2,68 @@
 
 ## Goal
 
-Extract the selected candidate section into a helper script and create the hardened SKILL.md.
+Turn the selected candidate section into a verified, runnable helper
+script, and produce a hardened SKILL.md that calls it.
 
 ## Prerequisites
 
-- Stage 3 (Baseline Tests) must be complete — baseline results documented
-- You have a selected candidate from Stage 2
-- You know the scripting language (from Language Selection in the orchestrator)
+- `baseline-results.md` and the scenario files from Stage 3, saved to disk.
+- A language selected (per `modes/harden.md`'s language-selection
+  procedure) and its reference file (`references/python.md` or
+  `references/javascript.md`) loaded — this must have happened by now at
+  the latest.
 
 ## Steps
 
-### Step 1 — Write the Helper Script
+### Step 1: Write and run the helper script
 
-1. Create the script in `<skill-name>-hardened/scripts/` using the chosen language's conventions (see the loaded language reference)
-2. The script must:
-   - Accept the same inputs the section currently processes
-   - Produce the same outputs the section currently generates
-   - Handle the edge cases identified in Stage 3's test scenarios
-3. Test that the script actually runs: execute it with sample input and verify output
+Write the helper script in `<skill-name>-hardened/scripts/`, following the
+template and conventions in the loaded language reference. The script
+must:
 
-### Step 2 — Create Hardened SKILL.md
+- Accept the candidate section's inputs.
+- Produce the candidate section's outputs.
+- Handle every edge case documented in the Stage 3 scenario files.
 
-Copy the original SKILL.md to `<skill-name>-hardened/SKILL.md`, then:
+Then **actually run it** against sample input and verify the output — do
+not assume correctness from reading the script.
 
-1. Replace the extracted procedural section with a script invocation:
-   `Run: <runtime> scripts/<name>.<ext> <args>`
-2. Document the script's inputs, outputs, and what it does in 1-2 lines
-3. Keep all non-deterministic content (judgment calls, decision trees, guidelines) inline
-4. Keep all reference content (schemas, examples) inline
-5. The hardened SKILL.md should be focused on orchestration: what to do, when, and which script to run
+### Step 2: Build the hardened SKILL.md
 
-### Step 3 — Copy Supporting Files
+Copy the original SKILL.md into `<skill-name>-hardened/SKILL.md`. Replace
+only the extracted section with:
 
-Copy any referenced files (references/, other supporting files) from the original skill to the hardened directory.
+```
+Run: <runtime> scripts/<name>.<ext> <args>
+```
 
-## Output Structure
+plus a 1–2 line note describing input, output, and purpose. Keep every
+non-deterministic section and every reference/declarative section inline,
+unchanged. The result should read as an orchestrator that delegates the
+one deterministic piece to a script and keeps everything else as
+LLM-driven prose.
+
+### Step 3: Copy supporting files
+
+Copy `references/` and any other supporting files from the original skill
+directory into the hardened directory, unchanged.
+
+## Output artifacts
 
 ```
 <skill-name>-hardened/
-  SKILL.md              # Modified — procedural section replaced with script call
-  scripts/              # Extracted helper scripts
-  references/           # Inherited from original (if any)
-  tests/                # From Stage 3 (already present)
+  SKILL.md              # procedural section replaced with a script call
+  scripts/<name>.<ext>  # extracted helper script (verified runnable)
+  references/           # inherited from original (if any)
+  tests/                # already present from Stage 3
     baseline-results.md
     scenario-*.md
 ```
 
 ## Gate
 
-**Do NOT proceed to Stage 5 until:**
-- Helper script is written and runs successfully
-- Hardened SKILL.md replaces the extracted section with script invocation
-- Supporting files are copied
-- The `<skill-name>-hardened/` directory structure is complete
+Before proceeding: confirm the script runs successfully against sample
+input, the hardened SKILL.md is complete and reads as an orchestrator, and
+all supporting files are copied over.
 
-**When complete:** Read `harden-stages/verify.md` and follow its instructions.
+**Read `verify.md` next.**

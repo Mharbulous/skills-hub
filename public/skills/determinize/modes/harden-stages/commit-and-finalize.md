@@ -1,102 +1,110 @@
-# Stage 6: Commit & Finalize
+# Stage 6: Commit and Finalize
 
 ## Goal
 
-Create a git recovery point, present results, and let the user decide the outcome.
+Record the hardening work with a recoverable commit, report on it, and let
+the user decide what happens to the hardened copy.
 
 ## Prerequisites
 
-- Stage 5 (Verify) must be complete — all regression tests pass
+- `green-results.md` from Stage 5, showing all scenarios passing.
+- The complete `<skill-name>-hardened/` tree.
 
-## Steps
+## Step 1: Recovery commit
 
-### Step 1 — Git Commit (Recovery Point)
-
-Use the `git-agent` subagent to commit ONLY the hardened skill files. This creates a recovery point in git history before any deletion occurs — either version can be recovered from this commit regardless of what the user decides next.
+Delegate to the git-agent:
 
 ```
-Invoke git-agent with prompt:
-"Commit these specific files from the hardening session. Stage ONLY files
+Commit these specific files from the hardening session. Stage ONLY files
 under the <skill-name>-hardened/ directory (SKILL.md, scripts/, tests/, references/).
 Do NOT stage changes to the original skill directory.
 
-Use this commit message format:
+Commit message:
 - Title: 'feat(skills): harden <skill-name> — extract <script-name> to script'
-- Body: Brief description of what was extracted and why
+- Body: brief description of what was extracted and why
 - Body MUST include the searchable key: [hardening:<skill-name>:<script-name>]
 - Include Co-Authored-By trailer
 
-Do NOT push to remote."
+Do NOT push to remote.
 ```
 
-### Step 2 — Summary Report
+The `[hardening:<skill-name>:<script-name>]` key format here must exactly
+match the format Stage 2 Step 4 greps for — same brackets, same colons,
+same skill/script name spelling.
 
-Output a summary table of the hardening session:
+## Step 2: Summary report
 
-- What was hardened (section name, which mode)
-- What was extracted (script name, what it does in 1 sentence)
-- Why this matters (what LLM variance it eliminates)
-- Files created (table of new/modified files with purpose)
-- Regression status (pass/fail)
+Produce a table covering: what was hardened, what was extracted, why it
+matters (determinism value / variance eliminated), files created, and
+regression status (from `green-results.md`).
 
-### Step 3 — A/B Test & Finalize
+## Step 3: Optional inline A/B test
 
-Ask the user via AskUserQuestion:
+Ask via `AskUserQuestion`: "Run A/B tests now" (Recommended) vs "Skip A/B
+tests".
 
-- **"Run A/B tests now" (Recommended)** — Runs controlled A/B tests between original and hardened skill using subagents in this session. Each trial gets a fresh context window for unbiased comparison.
-- **"Skip A/B tests"** — Keeps both versions on disk. You can run `/determinize -test` later to compare them.
+- **If run:** follow `modes/test.md` with these fixed parameters — Skill A
+  = original, Skill B = hardened, prompt = the Stage 3 baseline prompt,
+  3 per skill (minimum), model `sonnet`, `general-purpose` subagents with
+  `run_in_background: true`, strictly sequential A1, B1, A2, B2, A3, B3,
+  then `modes/test.md` Phases 3–5 (analyze, report, decide).
+- **If skip:** announce: "Both versions kept on disk. Run
+  `/determinize -test` in a new session to compare them later."
 
-**If user chooses "Run A/B tests now":**
+## Step 4: Three-way decision
 
-Run the A/B test inline using subagent-based trials. Follow the test mode process (`modes/test.md`) with these parameters:
+Ask via `AskUserQuestion`: Promote / Keep both / Delete. Mark the option
+that matches the decision-matrix outcome from Step 3 (if the A/B test ran)
+as "(Recommended)"; if the A/B test was skipped, mark "Keep both" as
+"(Recommended)" instead.
 
-- **Skill A:** `<skill-name>/SKILL.md` (original)
-- **Skill B:** `<skill-name>-hardened/SKILL.md` (hardened)
-- **Test task prompt:** The same prompt used during Stage 3 baseline
-- **Trials:** 3 per skill (minimum)
-- **Model:** sonnet
+### Promote branch
 
-Execute each trial as a `general-purpose` subagent with `run_in_background: true`, waiting for completion before launching the next trial. Alternate A/B: A1, B1, A2, B2, A3, B3.
+Delegate to:
 
-After all trials complete, extract metrics per test mode Phase 3, present the results report per test mode Phase 4, and apply the decision matrix per test mode Phase 5.
+```bash
+node <determinize-path>/scripts/promote-skill.mjs <path-to>/<skill-name>-hardened
+```
 
-Then proceed to the **User Decision** below.
+`<determinize-path>` is the directory containing the mode file you are
+currently reading — i.e. this `determinize` skill's own root directory.
+Resolve it from where you are, don't hardcode it.
 
-**If user chooses "Skip A/B tests":**
+Parse the script's JSON output. If `action` is `error`, report the message
+and stop — do not proceed to the commit below.
 
-Announce: "Both versions kept on disk. Run `/determinize -test` in a new session to compare them later."
+On success, delegate to the git-agent for a commit:
+- Title: `feat(skills): promote hardened <skill-name> — replace original`
+- Body: "Hardened version replaces original after passing regression
+  tests. Original recoverable from previous commit.\n\n[hardening:<skill-name>:<script-name>]"
 
-Then proceed to the **User Decision** below.
+Then announce: "Promotion complete. The hardened skill is now at
+`<skill-name>/`. The original is recoverable from the git commit prior to
+this one."
 
-### Step 4 — User Decision
+### Keep branch
 
-Ask the user via AskUserQuestion with three options:
+Announce: "Both versions retained. Run `/determinize -test` in a new
+session to compare them."
 
-- **"Promote hardened version"** — Replaces the original. The original is recoverable from the git commit in Step 1.
-- **"Keep both versions"** — Both remain on disk for further testing.
-- **"Delete hardened version"** — Removes the hardened version. Recoverable from the git commit in Step 1.
+### Delete branch
 
-If A/B test results are available, mark the option that aligns with the test mode decision matrix as "(Recommended)". If no A/B tests were run, mark "Keep both versions" as "(Recommended)".
+Delegate to the git-agent:
+- `git rm -r <skill-name>-hardened/`
+- Commit:
+  - Title: `revert(skills): remove hardened <skill-name> — original retained`
+  - Body: "Hardened version removed per user decision. Recoverable from
+    previous commit.\n\n[hardening:<skill-name>:<script-name>]"
 
-**If user chooses "Promote hardened version":**
+Then announce: "Hardened version deleted. The original skill remains at
+`<skill-name>/`. The hardened files are recoverable from the git commit
+prior to this one."
 
-1. Delete the original skill via git: `git rm -r <path-to-original-skill>/`
-2. Rename the hardened directory to the original name (remove `-hardened` suffix). If `git mv` on the directory fails (e.g., file locks), move files individually.
-3. Update all internal references in the promoted skill files from `<skill-name>-hardened` to `<skill-name>` (replace all occurrences).
-4. Run a final grep scan across the promoted directory for any remaining references to `<skill-name>-hardened`. Fix any found.
-5. Stage all changes and use git-agent to commit:
-   - Title: `feat(skills): promote hardened <skill-name> — replace original`
-   - Body: "Hardened version replaces original after passing regression tests. Original recoverable from previous commit.\n\n[hardening:<skill-name>:<script-name>]"
-6. Announce: "Promotion complete. The hardened skill is now at `<skill-name>/`. The original is recoverable from the git commit prior to this one."
+## Non-negotiables
 
-**If user chooses "Keep both versions":**
-
-Announce: "Both versions retained. Run `/determinize -test` in a new session to compare them."
-
-**If user chooses "Delete hardened version":**
-
-1. Remove the hardened directory via git: `git rm -r <skill-name>-hardened/`
-2. Stage and use git-agent to commit:
-   - Title: `revert(skills): remove hardened <skill-name> — original retained`
-   - Body: "Hardened version removed per user decision. Recoverable from previous commit.\n\n[hardening:<skill-name>:<script-name>]"
-3. Announce: "Hardened version deleted. The original skill remains at `<skill-name>/`. The hardened files are recoverable from the git commit prior to this one."
+- Never create a `deprecated/` or `archived/` folder. Git history is the
+  only recovery mechanism.
+- Never commit the original and hardened directories together in Step 1.
+- Every commit produced by this stage (harden, promote, delete) must carry
+  the `[hardening:<skill-name>:<script-name>]` key, byte-identical across
+  all three.

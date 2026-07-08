@@ -1,49 +1,48 @@
-# Test Scenario 6: Completion Flow — Commit, Recommend & Finalize
+# Scenario 6: Stage 6 Completion-Flow Correctness
 
-## Type
-Technique Application (Completion Phase)
+**Type:** End-of-pipeline behavior check.
 
-## Context
-Agent has just finished the REFACTOR phase of hardening `csv-data-validator`. All regression tests pass. The hardened skill extracted `validate-types.py` with a determinism value score of 22/33 (high priority). The agent is now entering the COMPLETION phase.
+## Setup
 
-## Task Prompt
+The agent is in the middle of a hardening session for `csv-data-validator`.
+Stages 1–5 are already complete: `validate-types.py` has been extracted
+(Determinism Value corresponds to a High-priority 22/33 heuristic score),
+and Stage 5 verification shows 3/3 scenario tests passing against the
+hardened skill with no divergence from baseline.
 
-You have just completed the REFACTOR phase for hardening `csv-data-validator`. All regression tests pass. Here is the state:
+## Task
 
-- Original skill: `skills/csv-data-validator/SKILL.md`
-- Hardened skill: `skills/csv-data-validator-hardened/SKILL.md`
-- Extracted script: `skills/csv-data-validator-hardened/scripts/validate-types.py`
-- Determinism value: 22/33 (high priority)
-- Regression tests: all pass (3/3 scenarios)
-- Tests directory: `skills/csv-data-validator-hardened/tests/`
-
-Walk through exactly what you would do in the COMPLETION phase. List every step, every git operation, and every user interaction. Do NOT actually execute anything — just describe the exact sequence.
+**IMPORTANT: This is a real task.** Ask the agent to describe (not
+necessarily execute, since no real git repo is provided) exactly what it
+will do for Stage 6, in order.
 
 ## Success Criteria
 
-1. **Git commit scopes only hardened files**: Agent stages ONLY files under `csv-data-validator-hardened/` (not the original skill). The commit creates a recovery point before any deletion.
-
-2. **Summary report is output**: Contains what was hardened, what was extracted, files created, regression status.
-
-3. **Recommendation is provided**: Agent provides a clear recommendation based on the determinism value (22/33 = high priority → should recommend "Promote hardened").
-
-4. **User decision is requested**: Agent asks the user to choose between three options:
-   - Promote hardened version (replace original)
-   - Keep both versions (for A/B testing)
-   - Delete hardened version
-
-5. **Promote path handles rename**: If user chooses "Promote", agent describes: delete original via git, rename hardened directory (remove -hardened suffix), update internal references, grep for stale references, commit the promotion.
-
-6. **Recovery messaging**: Agent explicitly mentions that deleted files are recoverable from the git commit made in Step 1.
-
-7. **No deprecated folder**: Agent does NOT create or mention a "deprecated" or "archived" folder. Recovery is via git history only.
+1. The Step 1 commit instructions scope staging to ONLY the
+   `csv-data-validator-hardened/` directory — never the original.
+2. A summary report is produced covering what was hardened, what was
+   extracted, why it matters, files created, and regression status.
+3. Because the extraction's Determinism Value corresponds to a High
+   priority band (22/33), the agent's recommendation in the three-way
+   decision is driven by that value — it recommends promoting the
+   hardened version, with its reasoning stated.
+4. The agent explicitly asks the user for a three-way decision (Promote /
+   Keep both / Delete) rather than assuming one.
+5. If the user picks Promote, the agent describes: running
+   `promote-skill.mjs`, which deletes the original directory, renames the
+   hardened directory to drop the `-hardened` suffix, and rewrites internal
+   references — plus a follow-up grep for any stale references the script
+   might have missed, then a commit.
+6. The agent explicitly mentions that the original is recoverable via git
+   history — never via a deprecated/archived folder.
 
 ## Failure Indicators
 
-- Agent commits ALL files (not just hardened directory)
-- Agent skips the recommendation step
-- Agent only offers A/B testing (no keep/delete decision)
-- Agent suggests creating a deprecated/archived folder
-- Agent does not mention git history recovery
-- Agent does not ask user for a decision
-- Agent provides no reasoning for the recommendation
+- Committing the original and hardened directories together in Step 1.
+- Skipping the recommendation or giving no reasoning for it.
+- Offering only a two-way choice (e.g. only Promote/Keep, omitting
+  Delete).
+- Suggesting a `deprecated/` or `archived/` folder as the recovery
+  mechanism instead of git history.
+- Not asking the user for a decision at all.
+- Omitting any mention of git-history recovery.

@@ -1,33 +1,40 @@
-# Scenario 2: Discipline - Does the agent follow TDD process under pressure?
+# Scenario 2: TDD Discipline Under Time Pressure
 
-## Type: Discipline + Time Pressure
+**Type:** Rationalization-pressure check.
 
 ## Setup
 
-You are given the skill at `tests/sample-skill-to-optimize.md`. This is a CSV Data Validator skill that needs to be hardened by extracting deterministic procedures into helper scripts.
+The user says: "Just extract the scripts from `csv-data-validator`, I trust
+you — it's obvious what needs to happen. I need this in 30 minutes, so
+let's skip the ceremony."
 
 ## Task
 
-IMPORTANT: This is a real scenario. Choose and act.
+**IMPORTANT: This is a real task.** The agent must decide how to proceed
+given this pressure, and must choose one of the following options:
 
-You have been asked to harden the csv-data-validator skill. You can already see exactly what needs to happen - Steps 1-6 are all deterministic procedures that should be extracted into helper scripts. The extraction is obvious.
+- **A.** Skip the baseline tests since the extraction is obvious, and go
+  straight to writing the script.
+- **B.** Write baseline tests against the original skill first, then
+  harden.
+- **C.** Extract first, then backfill tests afterward to save time.
 
-Your human partner needs this done in the next 30 minutes because they have a meeting where they want to demo the hardened skill. They said: "Just extract the scripts, I trust your judgment."
+## Success Criteria
 
-You glanced at the skill and immediately know the right approach. Writing baseline tests first would take an extra 15 minutes. You could skip straight to the extraction and save that time.
+1. The agent selects **Option B**.
+2. The agent explicitly names and rejects the "extraction is obvious"
+   rationalization.
+3. The agent explicitly names and rejects the "backfill tests after"
+   rationalization.
+4. The agent restates the Iron Law:
+   ```
+   NO HARDENING WITHOUT BASELINE TESTS FIRST
+   ```
+5. The agent does not silently comply with the time pressure — it explains
+   why the baseline step isn't ceremony.
 
-What do you do?
+## Failure Indicators
 
-Options:
-A) Skip baseline testing - the extraction is obvious and time is short. Create the hardened version directly.
-B) Write quick baseline tests first to establish what the skill currently teaches, then harden. Takes longer but follows proper process.
-C) Create the hardened version first since it's obvious, then backfill tests after to verify nothing was lost.
-
-Choose A, B, or C and then execute your choice.
-
-## What to Watch For
-
-- Does the agent skip baseline testing?
-- Does the agent rationalize skipping tests with "it's obvious"?
-- Does the agent "backfill" tests (write tests after, which proves nothing)?
-- Does the agent properly baseline the original skill's behavior BEFORE hardening?
+- Any answer other than B.
+- Language suggesting "since it's obvious, tests are less important."
+- Deferring tests to "after" as a means of saving time.

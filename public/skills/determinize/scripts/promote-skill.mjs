@@ -1,67 +1,39 @@
 #!/usr/bin/env node
 /**
- * Promote a hardened skill by replacing the original with the hardened version.
+ * Deterministic promoter for the determinize skill's "promote" mode.
  *
- * Usage: node promote-skill.mjs <hardened-skill-dir>
+ * Replaces an original skill directory with its `-hardened` sibling:
+ *   1. validates the hardened directory argument
+ *   2. rewrites the hardened directory's name inside its own text files
+ *   3. deletes the original directory
+ *   4. renames the hardened directory to the original's name
+ *   5. emits a single JSON object describing what happened
  *
- * The script infers the original skill directory by stripping the '-hardened' suffix.
- *
- * Operations:
- * 1. Validates both directories exist
- * 2. Updates SKILL.md frontmatter (removes '-hardened' from name field)
- * 3. Replaces all internal references to '<name>-hardened' with '<name>'
- * 4. Deletes the original skill directory
- * 5. Renames the hardened directory to the original name
- *
- * Outputs JSON to stdout:
- * {
- *   "action": "promoted" | "error",
- *   "original": "skills/foo",
- *   "hardened": "skills/foo-hardened",
- *   "filesUpdated": ["SKILL.md"],
- *   "filesDeleted": ["skills/foo/SKILL.md", ...],
- *   "message": "..."
- * }
+ * No git operations are performed here — this script only touches the
+ * filesystem. It intentionally does not wrap the fs mutations in try/catch:
+ * permission errors and other filesystem failures should crash loudly
+ * rather than being swallowed.
  */
-import { readdirSync, readFileSync, writeFileSync, rmSync, renameSync, existsSync, statSync } from 'fs';
+import { readdirSync, writeFileSync, readFileSync, rmSync, renameSync, existsSync, statSync } from 'fs';
 import { resolve, join, basename, dirname } from 'path';
 
-const hardenedDir = process.argv[2];
+const TEXT_EXTENSIONS = new Set(['md', 'js', 'mjs', 'cjs', 'ts', 'py', 'sh', 'yaml', 'yml', 'json']);
 
-if (!hardenedDir) {
-  console.log(JSON.stringify({ action: 'error', message: 'Usage: node promote-skill.mjs <hardened-skill-dir>' }));
+function toPosix(p) {
+  return p.split('\\').join('/');
+}
+
+function fail(message) {
+  console.log(JSON.stringify({ action: 'error', message }));
   process.exit(1);
 }
 
-const resolvedHardened = resolve(hardenedDir);
-const hardenedName = basename(resolvedHardened);
-
-if (!hardenedName.endsWith('-hardened')) {
-  console.log(JSON.stringify({ action: 'error', message: `Directory must end with '-hardened', got: ${hardenedName}` }));
-  process.exit(1);
-}
-
-const originalName = hardenedName.replace(/-hardened$/, '');
-const parentDir = dirname(resolvedHardened);
-const resolvedOriginal = join(parentDir, originalName);
-
-// Validate both exist
-if (!existsSync(resolvedHardened) || !statSync(resolvedHardened).isDirectory()) {
-  console.log(JSON.stringify({ action: 'error', message: `Hardened directory not found: ${resolvedHardened}` }));
-  process.exit(1);
-}
-
-if (!existsSync(resolvedOriginal) || !statSync(resolvedOriginal).isDirectory()) {
-  console.log(JSON.stringify({ action: 'error', message: `Original directory not found: ${resolvedOriginal}` }));
-  process.exit(1);
-}
-
-// Collect all files in hardened dir (recursive)
 function walkDir(dir) {
   const results = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) {
       results.push(...walkDir(full));
     } else {
       results.push(full);
@@ -70,39 +42,57 @@ function walkDir(dir) {
   return results;
 }
 
-// Collect files that were in the original (for reporting)
-const originalFiles = walkDir(resolvedOriginal).map(f => f.replace(/\\/g, '/'));
-
-// Update references in all text files in the hardened dir
-const hardenedFiles = walkDir(resolvedHardened);
-const textExts = new Set(['.md', '.js', '.mjs', '.cjs', '.ts', '.py', '.sh', '.yaml', '.yml', '.json']);
-const filesUpdated = [];
-
-for (const filePath of hardenedFiles) {
-  const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
-  if (!textExts.has(ext)) continue;
-
-  const content = readFileSync(filePath, 'utf-8');
-  // Replace references: hardenedName -> originalName (both in paths and name fields)
-  const updated = content.replaceAll(hardenedName, originalName);
-
-  if (updated !== content) {
-    writeFileSync(filePath, updated, 'utf-8');
-    filesUpdated.push(filePath.replace(/\\/g, '/').replace(resolvedHardened.replace(/\\/g, '/'), ''));
+function main() {
+  const arg = process.argv[2];
+  if (!arg) {
+    fail('Usage: node promote-skill.mjs <hardened-skill-dir>');
   }
+
+  const resolvedHardened = resolve(arg);
+  const hardenedName = basename(resolvedHardened);
+  if (!hardenedName.endsWith('-hardened')) {
+    fail(`Directory must end with '-hardened', got: ${hardenedName}`);
+  }
+
+  const originalName = hardenedName.replace(/-hardened$/, '');
+  const parentDir = dirname(resolvedHardened);
+  const resolvedOriginal = join(parentDir, originalName);
+
+  if (!existsSync(resolvedHardened) || !statSync(resolvedHardened).isDirectory()) {
+    fail(`Hardened directory not found: ${resolvedHardened}`);
+  }
+  if (!existsSync(resolvedOriginal) || !statSync(resolvedOriginal).isDirectory()) {
+    fail(`Original directory not found: ${resolvedOriginal}`);
+  }
+
+  const originalFiles = walkDir(resolvedOriginal).map(toPosix);
+
+  const hardenedFiles = walkDir(resolvedHardened);
+  const filesUpdated = [];
+  for (const filePath of hardenedFiles) {
+    const dotIndex = filePath.lastIndexOf('.');
+    const ext = dotIndex === -1 ? '' : filePath.slice(dotIndex + 1).toLowerCase();
+    if (!TEXT_EXTENSIONS.has(ext)) continue;
+    const content = readFileSync(filePath, 'utf8');
+    const updated = content.replaceAll(hardenedName, originalName);
+    if (updated !== content) {
+      writeFileSync(filePath, updated, 'utf8');
+      const relPath = toPosix(filePath.slice(resolvedHardened.length)).replace(/^\/*/, '/');
+      filesUpdated.push(relPath);
+    }
+  }
+
+  rmSync(resolvedOriginal, { recursive: true, force: true });
+  renameSync(resolvedHardened, resolvedOriginal);
+
+  console.log(JSON.stringify({
+    action: 'promoted',
+    original: toPosix(resolvedOriginal),
+    hardened: toPosix(resolvedHardened),
+    filesUpdated,
+    filesDeleted: originalFiles,
+    message: `Promoted ${hardenedName} -> ${originalName}`,
+  }));
 }
 
-// Delete original directory
-rmSync(resolvedOriginal, { recursive: true, force: true });
-
-// Rename hardened -> original
-renameSync(resolvedHardened, resolvedOriginal);
-
-console.log(JSON.stringify({
-  action: 'promoted',
-  original: resolvedOriginal.replace(/\\/g, '/'),
-  hardened: resolvedHardened.replace(/\\/g, '/'),
-  filesUpdated,
-  filesDeleted: originalFiles,
-  message: `Promoted ${hardenedName} -> ${originalName}`
-}));
+main();

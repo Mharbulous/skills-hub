@@ -2,43 +2,37 @@
 
 ## Goal
 
-Run the same regression tests from Stage 3 with the HARDENED skill and confirm all baseline behaviors are preserved.
+Confirm the hardened skill reproduces the original's baseline behavior
+exactly, with no new failures introduced by the extraction.
 
 ## Prerequisites
 
-- Stage 4 (Extract) must be complete — hardened SKILL.md and script exist
-- Stage 3 baseline results are available for comparison
+- The hardened `SKILL.md` and extracted script from Stage 4.
+- `baseline-results.md` from Stage 3.
 
 ## Steps
 
-### Step 1 — Run Regression Tests with Hardened Skill
+1. Re-run the same scenario files from Stage 3, this time against
+   `<skill-name>-hardened/SKILL.md` (same subagent parameters as Stage 3:
+   `general-purpose` subagent, model `sonnet` by default,
+   `run_in_background: true`, waiting for completion before the next
+   trial).
+2. Compare each result to `baseline-results.md`: same outputs, same edge
+   handling, no new failures.
+3. On any divergence: identify exactly where the hardened behavior differs
+   from baseline, fix the script or the hardened SKILL.md, and re-run the
+   affected scenario. Repeat until it matches. Never proceed with a
+   failing test.
 
-Run the same test scenarios from Stage 3, but this time using the HARDENED skill (`<skill-name>-hardened/SKILL.md`).
+## Output artifacts
 
-### Step 2 — Compare Results
-
-Compare hardened results against baseline results from `<skill-name>-hardened/tests/baseline-results.md`.
-
-All baseline behaviors MUST be preserved:
-- Same outputs for same inputs
-- Same edge case handling
-- No new failures
-
-### Step 3 — Handle Failures
-
-If any test fails: the hardening broke something.
-
-1. Identify what changed between original and hardened behavior
-2. Fix the helper script or hardened SKILL.md
-3. Re-run the failing test
-4. Repeat until all tests pass
-
-**Do NOT proceed to Stage 6 with any failing tests.**
+Write `<skill-name>-hardened/tests/green-results.md`, in the same shape as
+`baseline-results.md`, plus a "Comparison: Baseline vs GREEN" table showing
+each scenario's baseline result next to its GREEN (hardened) result.
 
 ## Gate
 
-**Do NOT proceed to Stage 6 until:**
-- All regression tests pass with the hardened skill
-- Results match baseline behavior
+Before proceeding: confirm all scenarios pass, results match baseline
+exactly, and `green-results.md` is saved to disk.
 
-**When complete:** Read `harden-stages/commit-and-finalize.md` and follow its instructions.
+**Read `commit-and-finalize.md` next.**

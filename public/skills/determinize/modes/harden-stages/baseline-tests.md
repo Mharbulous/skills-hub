@@ -1,59 +1,67 @@
 # Stage 3: Baseline Tests
 
-## Goal
-
-Write regression tests for the CHOSEN candidate and run them against the ORIGINAL skill to establish baseline behavior.
-
 ## The Iron Law
 
 ```
 NO HARDENING WITHOUT BASELINE TESTS FIRST
 ```
 
-You MUST have a selected candidate from Stage 2 before entering this stage. If you don't have one, go back.
+If you find yourself about to write or run an extraction script before
+this stage is fully complete: stop, delete any work done out of order, and
+restart from here. There are no exceptions. In particular, none of the
+following justify skipping this stage:
+
+- "the extraction is obvious"
+- "just moving code blocks"
+- "I'll backfill tests"
+
+## Goal
+
+Establish, in writing, exactly how the ORIGINAL skill behaves for the
+candidate section selected in Stage 2 — before any extraction exists to
+bias the comparison.
 
 ## Prerequisites
 
-- Stage 2 (Classify & Score) must be complete
-- A candidate section has been selected by the user (or auto-selected)
-- You know exactly which section will be extracted to a script
+- The candidate section selected (or auto-selected) in Stage 2.
 
 ## Steps
 
-### Step 1 — Create Test Directory
+1. Create `<skill-name>-hardened/tests/`. Note: this is the first thing
+   created in the hardened tree — SKILL.md and scripts/ do not exist yet
+   and are not created until Stage 4. The hardened directory exists at
+   this point solely to hold tests.
+2. Write scenario files into that directory, one per meaningful input
+   condition for the candidate section. Each scenario file must specify a
+   specific input condition and an expected behavior. Cover normal cases,
+   edge cases, and boundary cases for the candidate section — not just the
+   happy path.
+3. For each scenario, run it using a `general-purpose` subagent (model
+   `sonnet` by default, `run_in_background: true`) driving the ORIGINAL
+   skill (not the hardened copy, which doesn't have SKILL.md yet). Wait for
+   each subagent to complete before launching the next.
+4. Record the ORIGINAL skill's verbatim behavior for every scenario in
+   `<skill-name>-hardened/tests/baseline-results.md`.
 
-Create `<skill-name>-hardened/tests/` if it doesn't exist.
+## Output artifacts
 
-### Step 2 — Write Regression Test Scenarios
+- `<skill-name>-hardened/tests/scenario-*.md`
+- `<skill-name>-hardened/tests/baseline-results.md`
 
-Write test scenarios that exercise the skill's key behaviors, focusing on the section that will be hardened. Save in `<skill-name>-hardened/tests/`.
+## Red flags
 
-Each scenario should:
-- Describe a specific input condition
-- Specify expected behavior/output
-- Cover normal cases, edge cases, and boundary conditions for the candidate section
+Watch for these rationalizations — all of them mean "go back, baseline
+first":
 
-### Step 3 — Run Baseline with Original Skill
-
-Run each test scenario with a subagent using the ORIGINAL skill. Document baseline behavior verbatim.
-
-### Step 4 — Record Baseline Results
-
-Save baseline results in `<skill-name>-hardened/tests/baseline-results.md`. These are your regression suite — the hardened version MUST produce equivalent results.
-
-## Red Flags — STOP
-
-If you catch yourself thinking any of these:
-- "The extraction is obvious, I don't need baseline tests" — Go back. Baseline first.
-- "I can see exactly what to extract, testing would waste time" — Go back.
-- "I'll write tests after to verify" — Backfilled tests prove nothing.
-- "This is just moving code, what could go wrong?" — Go back.
+1. "The extraction is obvious, I don't need to test the original first."
+2. "Testing wastes time we don't have."
+3. "I'll backfill the baseline after I extract."
+4. "I'm just moving code blocks, nothing can change."
 
 ## Gate
 
-**Do NOT proceed to Stage 4 until:**
-- Test scenarios are written and saved
-- Baseline behavior is documented from running with the ORIGINAL skill
-- Results are saved in `baseline-results.md`
+Before proceeding: confirm the scenario files are saved, the baseline
+behavior is documented from the ORIGINAL skill (not from any draft
+extraction), and `baseline-results.md` is saved to disk.
 
-**When complete:** Read `harden-stages/extract.md` and follow its instructions.
+**Read `extract.md` next.**
